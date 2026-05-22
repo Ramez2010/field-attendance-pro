@@ -1,0 +1,20 @@
+﻿# Flutter
+apps/mobile/.dart_tool/
+apps/mobile/.flutter-plugins
+apps/mobile/.flutter-plugins-dependencies
+apps/mobile/build/
+apps/mobile/.env
+
+# Node
+apps/admin-dashboard/node_modules/
+apps/admin-dashboard/dist/
+apps/admin-dashboard/.env
+
+# OS / editors
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Local Supabase
+.supabase/
