@@ -14,14 +14,14 @@ import { SitesPage } from './pages/SitesPage';
 import { UsersPage } from './pages/UsersPage';
 
 export function App() {
-  const { session, profile, loading } = useAuth();
+  const { session, profile, profileError, loading } = useAuth();
 
   if (loading) return <LoadingState />;
 
   return (
     <Routes>
       <Route path="/login" element={session ? <Navigate to="/" replace /> : <LoginPage />} />
-      <Route element={<ProtectedShell session={session} profile={profile} />}>
+      <Route element={<ProtectedShell session={session} profile={profile} profileError={profileError} />}>
         <Route element={<Layout />}>
           <Route index element={<DashboardPage />} />
           <Route path="company" element={<CompanySettingsPage />} />
@@ -38,8 +38,26 @@ export function App() {
   );
 }
 
-function ProtectedShell({ session, profile }: { session: unknown; profile: { role: string } | null }) {
+function ProtectedShell({
+  session,
+  profile,
+  profileError,
+}: {
+  session: unknown;
+  profile: { role: string } | null;
+  profileError: string | null;
+}) {
   if (!session) return <Navigate to="/login" replace />;
+  if (!profile && profileError) {
+    return (
+      <main className="login-page">
+        <section className="login-card">
+          <h1>Profile setup required</h1>
+          <p>{profileError}</p>
+        </section>
+      </main>
+    );
+  }
   if (!profile) return <LoadingState />;
   if (profile.role === 'employee') {
     return (

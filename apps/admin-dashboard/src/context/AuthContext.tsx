@@ -7,6 +7,7 @@ import { UserProfile } from '../lib/types';
 type AuthContextValue = {
   session: Session | null;
   profile: UserProfile | null;
+  profileError: string | null;
   loading: boolean;
   signIn: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
@@ -28,55 +29,53 @@ async function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [profileError, setProfileError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
-  async function loadProfile(currentSession = session) {
+  async function loadProfile(currentSession = session): Promise<UserProfile | null> {
     if (!currentSession?.user) {
       setProfile(null);
-      return;
+      setProfileError(null);
+      return null;
     }
 
     const { data, error } = await supabase
       .from('users')
       .select('*')
       .eq('id', currentSession.user.id)
-      .single();
+      .maybeSingle();
 
     if (error) throw error;
-    setProfile(data as UserProfile);
+    if (!data) {
+      throw new Error('No admin profile found for this login email. Create a matching row in public.users.');
+    }
+
+    const nextProfile = data as UserProfile;
+    setProfile(nextProfile);
+    setProfileError(null);
+    return nextProfile;
   }
 
   useEffect(() => {
     let mounted = true;
 
     withTimeout(supabase.auth.getSession(), BOOTSTRAP_TIMEOUT_MS)
-      .then(async ({ data }) => {
+      .then(({ data }) => {
         if (!mounted) return;
         setSession(data.session);
-        try {
-          await withTimeout(loadProfile(data.session), BOOTSTRAP_TIMEOUT_MS);
-        } finally {
-          if (mounted) setLoading(false);
-        }
       })
       .catch(() => {
         if (!mounted) return;
         setSession(null);
         setProfile(null);
-        setLoading(false);
+        setProfileError(null);
+      })
+      .finally(() => {
+        if (mounted) setLoading(false);
       });
 
-    const { data: listener } = supabase.auth.onAuthStateChange(async (_event, nextSession) => {
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, nextSession) => {
       setSession(nextSession);
-      if (nextSession) {
-        try {
-          await loadProfile(nextSession);
-        } catch {
-          setProfile(null);
-        }
-      } else {
-        setProfile(null);
-      }
     });
 
     return () => {
@@ -85,21 +84,51 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
+  useEffect(() => {
+    let cancelled = false;
+
+    if (!session?.user) {
+      setProfile(null);
+      setProfileError(null);
+      return;
+    }
+
+    setProfile(null);
+    setProfileError(null);
+
+    withTimeout(loadProfile(session), BOOTSTRAP_TIMEOUT_MS).catch((error) => {
+      if (cancelled) return;
+      setProfile(null);
+      setProfileError(error instanceof Error ? error.message : 'Failed to load admin profile');
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [session?.user.id]);
+
   const value = useMemo<AuthContextValue>(
     () => ({
       session,
       profile,
+      profileError,
       loading,
       signIn: async (email, password) => {
-        const { error } = await supabase.auth.signInWithPassword({ email, password });
+        const { data, error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
+        setSession(data.session);
       },
       signOut: async () => {
         await supabase.auth.signOut();
+        setSession(null);
+        setProfile(null);
+        setProfileError(null);
       },
-      refreshProfile: async () => loadProfile(),
+      refreshProfile: async () => {
+        await loadProfile();
+      },
     }),
-    [session, profile, loading],
+    [session, profile, profileError, loading],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
