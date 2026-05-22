@@ -1,4 +1,4 @@
-﻿import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { ChangeEvent, FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 
 import { DataTable } from '../components/DataTable';
 import { Field, SelectField, ToggleField } from '../components/FormField';
@@ -6,6 +6,7 @@ import { PageHeader } from '../components/PageHeader';
 import { ErrorState, LoadingState } from '../components/State';
 import { useAuth } from '../context/AuthContext';
 import { useCompanyScope } from '../context/CompanyScopeContext';
+import { exportExcel, getSpreadsheetValue, importSpreadsheetRows } from '../lib/export';
 import { supabase } from '../lib/supabase';
 import { AppRole, Employee, UserProfile } from '../lib/types';
 
@@ -26,6 +27,8 @@ const emptyForm: UserForm = {
   is_active: true,
 };
 
+const userImportHeaders = ['email', 'temporary_password', 'role', 'employee_code', 'is_active'];
+
 export function UsersPage() {
   const { profile } = useAuth();
   const { selectedCompanyId, selectedCompany } = useCompanyScope();
@@ -34,8 +37,10 @@ export function UsersPage() {
   const [form, setForm] = useState<UserForm>(emptyForm);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [importing, setImporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const importInputRef = useRef<HTMLInputElement>(null);
 
   const employeeOptions = useMemo(
     () => employees
@@ -127,12 +132,88 @@ export function UsersPage() {
     await load();
   }
 
+  function exportUsers() {
+    exportExcel(
+      users.map((user) => ({
+        email: user.email,
+        temporary_password: '',
+        role: user.role,
+        employee_code: employees.find((employee) => employee.id === user.employee_id)?.employee_code ?? '',
+        is_active: user.is_active ? 'true' : 'false',
+      })),
+      `${selectedCompany?.name ?? 'company'}-users`,
+      userImportHeaders,
+    );
+  }
+
+  async function importUsers(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file || !selectedCompanyId) return;
+
+    setImporting(true);
+    setError(null);
+    setMessage(null);
+    try {
+      const rows = await importSpreadsheetRows(file);
+      if (rows.length === 0) throw new Error('The file has no user rows.');
+
+      const employeesByCode = new Map(employees.map((employee) => [employee.employee_code.trim().toLowerCase(), employee.id]));
+      let createdCount = 0;
+
+      for (const [index, row] of rows.entries()) {
+        const email = getSpreadsheetValue(row, ['email']).toLowerCase();
+        const password = getSpreadsheetValue(row, ['temporary_password', 'password']);
+        const role = normalizeRole(getSpreadsheetValue(row, ['role']));
+        const employeeCode = getSpreadsheetValue(row, ['employee_code', 'employee']);
+        const employeeId = employeeCode ? employeesByCode.get(employeeCode.trim().toLowerCase()) : null;
+
+        if (!email) throw new Error(`Row ${index + 2}: email is required.`);
+        if (!password || password.length < 8) throw new Error(`Row ${index + 2}: temporary_password must be at least 8 characters.`);
+        if (!role) throw new Error(`Row ${index + 2}: role must be super_admin, company_admin, or employee.`);
+        if (role === 'employee' && !employeeId) throw new Error(`Row ${index + 2}: employee users require a valid employee_code.`);
+
+        const { error: invokeError } = await supabase.functions.invoke('create-user', {
+          body: {
+            email,
+            password,
+            role,
+            company_id: selectedCompanyId,
+            employee_id: employeeId,
+            is_active: parseBoolean(getSpreadsheetValue(row, ['is_active', 'active']), true),
+          },
+        });
+
+        if (invokeError) throw new Error(`Row ${index + 2}: ${invokeError.message}`);
+        createdCount += 1;
+      }
+
+      setMessage(`Imported ${createdCount} users.`);
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to import users');
+    } finally {
+      setImporting(false);
+    }
+  }
+
   if (loading) return <LoadingState />;
   if (error && users.length === 0) return <ErrorState message={error} />;
 
   return (
     <>
-      <PageHeader title="User Management" eyebrow={selectedCompany ? `${selectedCompany.name} access control` : 'Credentials, roles, and access control'} />
+      <PageHeader
+        title="User Management"
+        eyebrow={selectedCompany ? `${selectedCompany.name} access control` : 'Credentials, roles, and access control'}
+        actions={
+          <div className="button-row">
+            <button className="secondary-button" onClick={exportUsers}>Export Excel</button>
+            <button className="secondary-button" onClick={() => exportExcel([], 'users-import-template', userImportHeaders)}>Template</button>
+            <button className="secondary-button" onClick={() => importInputRef.current?.click()} disabled={importing}>{importing ? 'Importing...' : 'Import Excel'}</button>
+            <input ref={importInputRef} className="hidden-file-input" type="file" accept=".xlsx,.xls,.csv" onChange={importUsers} />
+          </div>
+        }
+      />
       <section className="split-grid">
         <div className="panel">
           <h2>{form.id ? 'Edit user' : 'Create login credentials'}</h2>
@@ -174,4 +255,15 @@ export function UsersPage() {
       </section>
     </>
   );
+}
+
+function parseBoolean(value: string, fallback: boolean) {
+  if (!value) return fallback;
+  return ['true', 'yes', '1', 'active'].includes(value.trim().toLowerCase());
+}
+
+function normalizeRole(value: string): AppRole | null {
+  const normalized = value.trim().toLowerCase().replaceAll(' ', '_');
+  if (normalized === 'super_admin' || normalized === 'company_admin' || normalized === 'employee') return normalized;
+  return null;
 }

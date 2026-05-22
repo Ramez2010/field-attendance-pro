@@ -81,6 +81,7 @@ h2 { margin: 0 0 16px; font-size: 1.2rem; }
 .inline-error { background: #ffedeb; color: var(--danger); }
 .inline-success { background: var(--mint); color: var(--forest); }
 .danger-text { color: var(--danger); }
+.hidden-file-input { display: none; }
 
 .table-wrap { width: 100%; overflow-x: auto; border-radius: 20px; border: 1px solid var(--line); background: white; }
 table { width: 100%; border-collapse: collapse; min-width: 760px; }

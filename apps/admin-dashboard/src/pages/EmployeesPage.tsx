@@ -1,4 +1,4 @@
-﻿import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { ChangeEvent, FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 
 import { DataTable } from '../components/DataTable';
 import { Field, SelectField, ToggleField } from '../components/FormField';
@@ -6,6 +6,7 @@ import { PageHeader } from '../components/PageHeader';
 import { ErrorState, LoadingState } from '../components/State';
 import { useAuth } from '../context/AuthContext';
 import { useCompanyScope } from '../context/CompanyScopeContext';
+import { exportExcel, getSpreadsheetValue, importSpreadsheetRows } from '../lib/export';
 import { supabase } from '../lib/supabase';
 import { Employee, Site } from '../lib/types';
 
@@ -30,6 +31,8 @@ const emptyForm: EmployeeForm = {
   is_active: true,
 };
 
+const employeeImportHeaders = ['employee_code', 'full_name', 'phone', 'email', 'department', 'assigned_site', 'is_active'];
+
 export function EmployeesPage() {
   const { profile } = useAuth();
   const { selectedCompanyId, selectedCompany } = useCompanyScope();
@@ -38,8 +41,10 @@ export function EmployeesPage() {
   const [form, setForm] = useState<EmployeeForm>(emptyForm);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [importing, setImporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const importInputRef = useRef<HTMLInputElement>(null);
 
   const siteOptions = useMemo(
     () => sites.map((site) => ({ label: site.name, value: site.id })),
@@ -122,12 +127,93 @@ export function EmployeesPage() {
     await load();
   }
 
+  function exportEmployees() {
+    exportExcel(
+      employees.map((employee) => ({
+        employee_code: employee.employee_code,
+        full_name: employee.full_name,
+        phone: employee.phone ?? '',
+        email: employee.email ?? '',
+        department: employee.department ?? '',
+        assigned_site: sites.find((site) => site.id === employee.assigned_site_id)?.name ?? '',
+        is_active: employee.is_active ? 'true' : 'false',
+      })),
+      `${selectedCompany?.name ?? 'company'}-employees`,
+      employeeImportHeaders,
+    );
+  }
+
+  async function importEmployees(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file || !selectedCompanyId) return;
+
+    setImporting(true);
+    setError(null);
+    setMessage(null);
+    try {
+      const rows = await importSpreadsheetRows(file);
+      if (rows.length === 0) throw new Error('The file has no employee rows.');
+
+      const sitesByName = new Map(sites.map((site) => [site.name.trim().toLowerCase(), site.id]));
+      const sitesById = new Map(sites.map((site) => [site.id, site.id]));
+
+      const payload = rows.map((row, index) => {
+        const employeeCode = getSpreadsheetValue(row, ['employee_code', 'code']);
+        const fullName = getSpreadsheetValue(row, ['full_name', 'name']);
+        if (!employeeCode || !fullName) {
+          throw new Error(`Row ${index + 2}: employee_code and full_name are required.`);
+        }
+
+        const siteValue = getSpreadsheetValue(row, ['assigned_site', 'site', 'site_name', 'assigned_site_id']);
+        const assignedSiteId = sitesById.get(siteValue) ?? sitesByName.get(siteValue.trim().toLowerCase()) ?? null;
+        if (siteValue && !assignedSiteId) {
+          throw new Error(`Row ${index + 2}: assigned_site "${siteValue}" was not found in the selected company.`);
+        }
+
+        return {
+          company_id: selectedCompanyId,
+          employee_code: employeeCode,
+          full_name: fullName,
+          phone: getSpreadsheetValue(row, ['phone']) || null,
+          email: getSpreadsheetValue(row, ['email']) || null,
+          department: getSpreadsheetValue(row, ['department']) || null,
+          assigned_site_id: assignedSiteId,
+          is_active: parseBoolean(getSpreadsheetValue(row, ['is_active', 'active']), true),
+        };
+      });
+
+      const { error: importError } = await supabase
+        .from('employees')
+        .upsert(payload, { onConflict: 'company_id,employee_code' });
+      if (importError) throw importError;
+
+      setMessage(`Imported ${payload.length} employees.`);
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to import employees');
+    } finally {
+      setImporting(false);
+    }
+  }
+
   if (loading) return <LoadingState />;
   if (error && employees.length === 0) return <ErrorState message={error} />;
 
   return (
     <>
-      <PageHeader title="Employee Management" eyebrow={selectedCompany ? `${selectedCompany.name} profiles` : 'Profiles and site assignment'} />
+      <PageHeader
+        title="Employee Management"
+        eyebrow={selectedCompany ? `${selectedCompany.name} profiles` : 'Profiles and site assignment'}
+        actions={
+          <div className="button-row">
+            <button className="secondary-button" onClick={exportEmployees}>Export Excel</button>
+            <button className="secondary-button" onClick={() => exportExcel([], 'employees-import-template', employeeImportHeaders)}>Template</button>
+            <button className="secondary-button" onClick={() => importInputRef.current?.click()} disabled={importing}>{importing ? 'Importing...' : 'Import Excel'}</button>
+            <input ref={importInputRef} className="hidden-file-input" type="file" accept=".xlsx,.xls,.csv" onChange={importEmployees} />
+          </div>
+        }
+      />
       <section className="split-grid">
         <div className="panel">
           <h2>{form.id ? 'Edit employee' : 'Add employee'}</h2>
@@ -172,4 +258,9 @@ export function EmployeesPage() {
       </section>
     </>
   );
+}
+
+function parseBoolean(value: string, fallback: boolean) {
+  if (!value) return fallback;
+  return ['true', 'yes', '1', 'active'].includes(value.trim().toLowerCase());
 }
