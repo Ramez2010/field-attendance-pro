@@ -6,10 +6,11 @@ import { PageHeader } from '../components/PageHeader';
 import { ErrorState, LoadingState } from '../components/State';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
-import { Employee, Site } from '../lib/types';
+import { Company, Employee, Site } from '../lib/types';
 
 type EmployeeForm = {
   id?: string;
+  company_id: string;
   employee_code: string;
   full_name: string;
   phone: string;
@@ -20,6 +21,7 @@ type EmployeeForm = {
 };
 
 const emptyForm: EmployeeForm = {
+  company_id: '',
   employee_code: '',
   full_name: '',
   phone: '',
@@ -32,6 +34,7 @@ const emptyForm: EmployeeForm = {
 export function EmployeesPage() {
   const { profile } = useAuth();
   const [employees, setEmployees] = useState<Employee[]>([]);
+  const [companies, setCompanies] = useState<Company[]>([]);
   const [sites, setSites] = useState<Site[]>([]);
   const [form, setForm] = useState<EmployeeForm>(emptyForm);
   const [loading, setLoading] = useState(true);
@@ -39,7 +42,13 @@ export function EmployeesPage() {
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
-  const siteOptions = useMemo(() => sites.map((site) => ({ label: site.name, value: site.id })), [sites]);
+  const companyOptions = useMemo(() => companies.map((company) => ({ label: company.name, value: company.id })), [companies]);
+  const siteOptions = useMemo(
+    () => sites
+      .filter((site) => !form.company_id || site.company_id === form.company_id)
+      .map((site) => ({ label: site.name, value: site.id })),
+    [sites, form.company_id],
+  );
 
   async function load() {
     if (!profile) return;
@@ -48,15 +57,24 @@ export function EmployeesPage() {
     try {
       let employeeQuery = supabase.from('employees').select('*').order('created_at', { ascending: false });
       let siteQuery = supabase.from('sites').select('*').eq('is_active', true).order('name');
+      let companiesQuery = supabase.from('companies').select('*').order('name');
       if (profile.role !== 'super_admin') {
         employeeQuery = employeeQuery.eq('company_id', profile.company_id);
         siteQuery = siteQuery.eq('company_id', profile.company_id);
+        companiesQuery = companiesQuery.eq('id', profile.company_id);
       }
-      const [employeeResult, siteResult] = await Promise.all([employeeQuery, siteQuery]);
+      const [employeeResult, siteResult, companiesResult] = await Promise.all([employeeQuery, siteQuery, companiesQuery]);
       if (employeeResult.error) throw employeeResult.error;
       if (siteResult.error) throw siteResult.error;
+      if (companiesResult.error) throw companiesResult.error;
+      const companyRows = (companiesResult.data ?? []) as Company[];
       setEmployees((employeeResult.data ?? []) as Employee[]);
       setSites((siteResult.data ?? []) as Site[]);
+      setCompanies(companyRows);
+      setForm((current) => {
+        if (current.company_id || companyRows.length === 0) return current;
+        return { ...current, company_id: profile.role === 'super_admin' ? companyRows[0].id : profile.company_id };
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load employees');
     } finally {
@@ -71,6 +89,7 @@ export function EmployeesPage() {
   function edit(employee: Employee) {
     setForm({
       id: employee.id,
+      company_id: employee.company_id,
       employee_code: employee.employee_code,
       full_name: employee.full_name,
       phone: employee.phone ?? '',
@@ -89,7 +108,7 @@ export function EmployeesPage() {
     setMessage(null);
     try {
       const payload = {
-        company_id: profile.company_id,
+        company_id: profile.role === 'super_admin' ? form.company_id : profile.company_id,
         employee_code: form.employee_code,
         full_name: form.full_name,
         phone: form.phone || null,
@@ -104,7 +123,7 @@ export function EmployeesPage() {
         : await supabase.from('employees').insert(payload);
       if (saveError) throw saveError;
       setMessage(form.id ? 'Employee updated.' : 'Employee created.');
-      setForm(emptyForm);
+      setForm({ ...emptyForm, company_id: profile.role === 'super_admin' ? form.company_id : profile.company_id });
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to save employee');
@@ -129,6 +148,16 @@ export function EmployeesPage() {
         <div className="panel">
           <h2>{form.id ? 'Edit employee' : 'Add employee'}</h2>
           <form onSubmit={save} className="form-stack">
+            {profile?.role === 'super_admin' && (
+              <SelectField
+                label="Company"
+                value={form.company_id}
+                options={companyOptions}
+                onChange={(event) => setForm({ ...form, company_id: event.target.value, assigned_site_id: '' })}
+                disabled={Boolean(form.id)}
+                required
+              />
+            )}
             <Field label="Employee code" value={form.employee_code} onChange={(event) => setForm({ ...form, employee_code: event.target.value })} required />
             <Field label="Full name" value={form.full_name} onChange={(event) => setForm({ ...form, full_name: event.target.value })} required />
             <Field label="Phone" value={form.phone} onChange={(event) => setForm({ ...form, phone: event.target.value })} />
@@ -151,6 +180,9 @@ export function EmployeesPage() {
             columns={[
               { header: 'Code', cell: (row) => row.employee_code },
               { header: 'Name', cell: (row) => row.full_name },
+              ...(profile?.role === 'super_admin'
+                ? [{ header: 'Company', cell: (row: Employee) => companies.find((company) => company.id === row.company_id)?.name ?? '-' }]
+                : []),
               { header: 'Department', cell: (row) => row.department ?? '-' },
               { header: 'Site', cell: (row) => sites.find((site) => site.id === row.assigned_site_id)?.name ?? '-' },
               { header: 'Status', cell: (row) => <span className={`pill ${row.is_active ? 'active' : 'inactive'}`}>{row.is_active ? 'active' : 'inactive'}</span> },
