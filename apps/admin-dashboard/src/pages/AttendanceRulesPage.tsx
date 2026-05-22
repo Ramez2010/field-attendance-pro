@@ -1,11 +1,12 @@
 ﻿import { FormEvent, useEffect, useState } from 'react';
 
-import { Field, SelectField, ToggleField } from '../components/FormField';
+import { Field, ToggleField } from '../components/FormField';
 import { PageHeader } from '../components/PageHeader';
 import { ErrorState, LoadingState } from '../components/State';
 import { useAuth } from '../context/AuthContext';
+import { useCompanyScope } from '../context/CompanyScopeContext';
 import { supabase } from '../lib/supabase';
-import { AttendanceSettings, Company } from '../lib/types';
+import { AttendanceSettings } from '../lib/types';
 
 const defaults = {
   require_geofence: true,
@@ -17,8 +18,7 @@ const defaults = {
 
 export function AttendanceRulesPage() {
   const { profile } = useAuth();
-  const [companies, setCompanies] = useState<Company[]>([]);
-  const [selectedCompanyId, setSelectedCompanyId] = useState('');
+  const { selectedCompanyId, selectedCompany } = useCompanyScope();
   const [settings, setSettings] = useState<typeof defaults>(defaults);
   const [settingsId, setSettingsId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -26,36 +26,15 @@ export function AttendanceRulesPage() {
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
-  const targetCompanyId = profile?.role === 'super_admin' ? selectedCompanyId : profile?.company_id;
-
   async function load() {
-    if (!profile) return;
+    if (!profile || !selectedCompanyId) return;
     setLoading(true);
     setError(null);
     try {
-      let companiesQuery = supabase.from('companies').select('*').order('name');
-      if (profile.role !== 'super_admin') companiesQuery = companiesQuery.eq('id', profile.company_id);
-      const { data: companyData, error: companiesError } = await companiesQuery;
-      if (companiesError) throw companiesError;
-
-      const companyRows = (companyData ?? []) as Company[];
-      const nextCompanyId = profile.role === 'super_admin'
-        ? selectedCompanyId || companyRows[0]?.id
-        : profile.company_id;
-
-      setCompanies(companyRows);
-      setSelectedCompanyId(nextCompanyId ?? '');
-
-      if (!nextCompanyId) {
-        setSettings(defaults);
-        setSettingsId(null);
-        return;
-      }
-
       const { data, error: loadError } = await supabase
         .from('attendance_settings')
         .select('*')
-        .eq('company_id', nextCompanyId)
+        .eq('company_id', selectedCompanyId)
         .maybeSingle();
       if (loadError) throw loadError;
       if (data) {
@@ -85,12 +64,12 @@ export function AttendanceRulesPage() {
 
   async function save(event: FormEvent) {
     event.preventDefault();
-    if (!profile || !targetCompanyId) return;
+    if (!profile || !selectedCompanyId) return;
     setSaving(true);
     setError(null);
     setMessage(null);
     try {
-      const payload = { ...settings, company_id: targetCompanyId, minimum_gps_accuracy: Number(settings.minimum_gps_accuracy) };
+      const payload = { ...settings, company_id: selectedCompanyId, minimum_gps_accuracy: Number(settings.minimum_gps_accuracy) };
       const upsertPayload = settingsId ? { id: settingsId, ...payload } : payload;
       const { error: saveError } = await supabase
         .from('attendance_settings')
@@ -110,18 +89,9 @@ export function AttendanceRulesPage() {
 
   return (
     <>
-      <PageHeader title="Attendance Rules" eyebrow="GPS and attendance validation" />
+      <PageHeader title="Attendance Rules" eyebrow={selectedCompany ? `${selectedCompany.name} GPS validation` : 'GPS and attendance validation'} />
       <section className="panel narrow">
         <form onSubmit={save} className="form-stack">
-          {profile?.role === 'super_admin' && (
-            <SelectField
-              label="Company"
-              value={selectedCompanyId}
-              options={companies.map((company) => ({ label: company.name, value: company.id }))}
-              onChange={(event) => setSelectedCompanyId(event.target.value)}
-              required
-            />
-          )}
           <ToggleField label="Require geofence validation" checked={settings.require_geofence} onChange={(value) => setSettings({ ...settings, require_geofence: value })} />
           <Field
             label="Minimum GPS accuracy in meters"

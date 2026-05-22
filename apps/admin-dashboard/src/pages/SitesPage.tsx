@@ -1,16 +1,16 @@
 ﻿import { FormEvent, useEffect, useState } from 'react';
 
 import { DataTable } from '../components/DataTable';
-import { Field, SelectField, TextArea, ToggleField } from '../components/FormField';
+import { Field, TextArea, ToggleField } from '../components/FormField';
 import { PageHeader } from '../components/PageHeader';
 import { ErrorState, LoadingState } from '../components/State';
 import { useAuth } from '../context/AuthContext';
+import { useCompanyScope } from '../context/CompanyScopeContext';
 import { supabase } from '../lib/supabase';
-import { Company, Site } from '../lib/types';
+import { Site } from '../lib/types';
 
 type SiteForm = {
   id?: string;
-  company_id: string;
   name: string;
   address: string;
   latitude: string;
@@ -20,7 +20,6 @@ type SiteForm = {
 };
 
 const emptyForm: SiteForm = {
-  company_id: '',
   name: '',
   address: '',
   latitude: '',
@@ -31,36 +30,26 @@ const emptyForm: SiteForm = {
 
 export function SitesPage() {
   const { profile } = useAuth();
+  const { selectedCompanyId, selectedCompany } = useCompanyScope();
   const [sites, setSites] = useState<Site[]>([]);
-  const [companies, setCompanies] = useState<Company[]>([]);
   const [form, setForm] = useState<SiteForm>(emptyForm);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
-  const companyOptions = companies.map((company) => ({ label: company.name, value: company.id }));
-
   async function load() {
-    if (!profile) return;
+    if (!profile || !selectedCompanyId) return;
     setLoading(true);
     setError(null);
     try {
-      let query = supabase.from('sites').select('*').order('created_at', { ascending: false });
-      let companiesQuery = supabase.from('companies').select('*').order('name');
-      if (profile.role !== 'super_admin') query = query.eq('company_id', profile.company_id);
-      if (profile.role !== 'super_admin') companiesQuery = companiesQuery.eq('id', profile.company_id);
-      const [sitesResult, companiesResult] = await Promise.all([query, companiesQuery]);
-      const { data, error: loadError } = sitesResult;
+      const { data, error: loadError } = await supabase
+        .from('sites')
+        .select('*')
+        .eq('company_id', selectedCompanyId)
+        .order('created_at', { ascending: false });
       if (loadError) throw loadError;
-      if (companiesResult.error) throw companiesResult.error;
-      const companyRows = (companiesResult.data ?? []) as Company[];
       setSites((data ?? []) as Site[]);
-      setCompanies(companyRows);
-      setForm((current) => {
-        if (current.company_id || companyRows.length === 0) return current;
-        return { ...current, company_id: profile.role === 'super_admin' ? companyRows[0].id : profile.company_id };
-      });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load sites');
     } finally {
@@ -69,13 +58,14 @@ export function SitesPage() {
   }
 
   useEffect(() => {
+    setForm(emptyForm);
+    setMessage(null);
     load();
-  }, [profile]);
+  }, [profile, selectedCompanyId]);
 
   function edit(site: Site) {
     setForm({
       id: site.id,
-      company_id: site.company_id,
       name: site.name,
       address: site.address ?? '',
       latitude: String(site.latitude),
@@ -87,13 +77,13 @@ export function SitesPage() {
 
   async function save(event: FormEvent) {
     event.preventDefault();
-    if (!profile) return;
+    if (!profile || !selectedCompanyId) return;
     setSaving(true);
     setError(null);
     setMessage(null);
     try {
       const payload = {
-        company_id: profile.role === 'super_admin' ? form.company_id : profile.company_id,
+        company_id: selectedCompanyId,
         name: form.name,
         address: form.address || null,
         latitude: Number(form.latitude),
@@ -106,7 +96,7 @@ export function SitesPage() {
         : await supabase.from('sites').insert(payload);
       if (saveError) throw saveError;
       setMessage(form.id ? 'Site updated.' : 'Site created.');
-      setForm({ ...emptyForm, company_id: profile.role === 'super_admin' ? form.company_id : profile.company_id });
+      setForm(emptyForm);
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to save site');
@@ -127,21 +117,11 @@ export function SitesPage() {
 
   return (
     <>
-      <PageHeader title="Site / Geofence Management" eyebrow="Work locations and radius validation" />
+      <PageHeader title="Site / Geofence Management" eyebrow={selectedCompany ? `${selectedCompany.name} geofences` : 'Work locations and radius validation'} />
       <section className="split-grid">
         <div className="panel">
           <h2>{form.id ? 'Edit site' : 'Add site'}</h2>
           <form onSubmit={save} className="form-stack">
-            {profile?.role === 'super_admin' && (
-              <SelectField
-                label="Company"
-                value={form.company_id}
-                options={companyOptions}
-                onChange={(event) => setForm({ ...form, company_id: event.target.value })}
-                disabled={Boolean(form.id)}
-                required
-              />
-            )}
             <Field label="Site name" value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} required />
             <TextArea label="Address" value={form.address} onChange={(event) => setForm({ ...form, address: event.target.value })} rows={3} />
             <Field label="Latitude" type="number" step="0.0000001" value={form.latitude} onChange={(event) => setForm({ ...form, latitude: event.target.value })} required />
@@ -162,9 +142,6 @@ export function SitesPage() {
             rows={sites}
             columns={[
               { header: 'Name', cell: (row) => row.name },
-              ...(profile?.role === 'super_admin'
-                ? [{ header: 'Company', cell: (row: Site) => companies.find((company) => company.id === row.company_id)?.name ?? '-' }]
-                : []),
               { header: 'Coordinates', cell: (row) => `${Number(row.latitude).toFixed(5)}, ${Number(row.longitude).toFixed(5)}` },
               { header: 'Radius', cell: (row) => `${row.allowed_radius_meters}m` },
               { header: 'Status', cell: (row) => <span className={`pill ${row.is_active ? 'active' : 'inactive'}`}>{row.is_active ? 'active' : 'inactive'}</span> },

@@ -6,6 +6,7 @@ import { PageHeader } from '../components/PageHeader';
 import { StatCard } from '../components/StatCard';
 import { ErrorState, LoadingState } from '../components/State';
 import { useAuth } from '../context/AuthContext';
+import { useCompanyScope } from '../context/CompanyScopeContext';
 import { formatDateTime } from '../lib/date';
 import { exportCsv, exportExcel } from '../lib/export';
 import { supabase } from '../lib/supabase';
@@ -29,6 +30,7 @@ function localDateKey(value: string) {
 
 export function ReportsPage() {
   const { profile } = useAuth();
+  const { selectedCompanyId, selectedCompany } = useCompanyScope();
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [sites, setSites] = useState<Site[]>([]);
   const [employeeId, setEmployeeId] = useState('');
@@ -45,16 +47,12 @@ export function ReportsPage() {
   const siteOptions = useMemo(() => sites.map((site) => ({ label: site.name, value: site.id })), [sites]);
 
   async function loadFilters() {
-    if (!profile) return;
+    if (!profile || !selectedCompanyId) return;
     setLoading(true);
     setError(null);
     try {
-      let employeesQuery = supabase.from('employees').select('*').order('full_name');
-      let sitesQuery = supabase.from('sites').select('*').order('name');
-      if (profile.role !== 'super_admin') {
-        employeesQuery = employeesQuery.eq('company_id', profile.company_id);
-        sitesQuery = sitesQuery.eq('company_id', profile.company_id);
-      }
+      const employeesQuery = supabase.from('employees').select('*').eq('company_id', selectedCompanyId).order('full_name');
+      const sitesQuery = supabase.from('sites').select('*').eq('company_id', selectedCompanyId).order('name');
       const [employeeResult, siteResult] = await Promise.all([employeesQuery, sitesQuery]);
       if (employeeResult.error) throw employeeResult.error;
       if (siteResult.error) throw siteResult.error;
@@ -69,17 +67,17 @@ export function ReportsPage() {
 
   async function runReport(event?: FormEvent) {
     event?.preventDefault();
-    if (!profile) return;
+    if (!profile || !selectedCompanyId) return;
     setReportLoading(true);
     setError(null);
     try {
       let query = supabase
         .from('attendance_records_detailed')
         .select('*')
+        .eq('company_id', selectedCompanyId)
         .gte('attendance_time', startOfDateIso(dateFrom))
         .lte('attendance_time', endOfDateIso(dateTo))
         .order('attendance_time', { ascending: false });
-      if (profile.role !== 'super_admin') query = query.eq('company_id', profile.company_id);
       if (employeeId) query = query.eq('employee_id', employeeId);
       if (siteId) query = query.eq('site_id', siteId);
       const { data, error: reportError } = await query;
@@ -93,8 +91,11 @@ export function ReportsPage() {
   }
 
   useEffect(() => {
+    setEmployeeId('');
+    setSiteId('');
+    setRecords([]);
     loadFilters();
-  }, [profile]);
+  }, [profile, selectedCompanyId]);
 
   useEffect(() => {
     if (!loading) runReport();
@@ -140,7 +141,7 @@ export function ReportsPage() {
     <>
       <PageHeader
         title="Reports"
-        eyebrow="Daily, employee, site, missing check-out, and late arrival views"
+        eyebrow={selectedCompany ? `${selectedCompany.name} attendance reports` : 'Daily, employee, site, missing check-out, and late arrival views'}
         actions={
           <div className="button-row">
             <button className="secondary-button" onClick={() => exportCsv(exportRows, 'attendance-report')} disabled={records.length === 0}>Export CSV</button>

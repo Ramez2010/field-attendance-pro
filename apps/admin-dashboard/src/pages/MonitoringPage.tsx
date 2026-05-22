@@ -6,29 +6,31 @@ import { PageHeader } from '../components/PageHeader';
 import { StatCard } from '../components/StatCard';
 import { ErrorState, LoadingState } from '../components/State';
 import { useAuth } from '../context/AuthContext';
+import { useCompanyScope } from '../context/CompanyScopeContext';
 import { endOfTodayIso, formatDateTime, startOfTodayIso } from '../lib/date';
 import { supabase } from '../lib/supabase';
 import { AttendanceRecordDetailed } from '../lib/types';
 
 export function MonitoringPage() {
   const { profile } = useAuth();
+  const { selectedCompanyId, selectedCompany } = useCompanyScope();
   const [records, setRecords] = useState<AttendanceRecordDetailed[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   async function load() {
-    if (!profile) return;
+    if (!profile || !selectedCompanyId) return;
     setLoading(true);
     setError(null);
     try {
-      let query = supabase
+      const query = supabase
         .from('attendance_records_detailed')
         .select('*')
+        .eq('company_id', selectedCompanyId)
         .gte('attendance_time', startOfTodayIso())
         .lt('attendance_time', endOfTodayIso())
         .order('attendance_time', { ascending: false })
         .limit(200);
-      if (profile.role !== 'super_admin') query = query.eq('company_id', profile.company_id);
       const { data, error: loadError } = await query;
       if (loadError) throw loadError;
       setRecords((data ?? []) as AttendanceRecordDetailed[]);
@@ -43,7 +45,7 @@ export function MonitoringPage() {
     load();
     const interval = window.setInterval(load, 30000);
     return () => window.clearInterval(interval);
-  }, [profile]);
+  }, [profile, selectedCompanyId]);
 
   if (loading) return <LoadingState />;
   if (error) return <ErrorState message={error} />;
@@ -57,7 +59,7 @@ export function MonitoringPage() {
 
   return (
     <>
-      <PageHeader title="Attendance Monitoring" eyebrow="Auto-refreshes every 30 seconds" actions={<button className="secondary-button" onClick={load}>Refresh</button>} />
+      <PageHeader title="Attendance Monitoring" eyebrow={selectedCompany ? `${selectedCompany.name} live view` : 'Auto-refreshes every 30 seconds'} actions={<button className="secondary-button" onClick={load}>Refresh</button>} />
       <section className="stats-grid">
         <StatCard label="Employees seen today" value={liveLocations.length} icon={<RadioTower size={22} />} />
         <StatCard label="Currently checked in" value={checkedIn} icon={<MapPin size={22} />} />

@@ -4,6 +4,7 @@ import { Field, SelectField } from '../components/FormField';
 import { PageHeader } from '../components/PageHeader';
 import { ErrorState, LoadingState } from '../components/State';
 import { useAuth } from '../context/AuthContext';
+import { useCompanyScope } from '../context/CompanyScopeContext';
 import { supabase } from '../lib/supabase';
 import { Company } from '../lib/types';
 
@@ -11,6 +12,7 @@ const timezones = ['UTC', 'Africa/Cairo', 'Asia/Riyadh', 'Asia/Dubai', 'Europe/L
 
 export function CompanySettingsPage() {
   const { profile } = useAuth();
+  const { selectedCompanyId, setSelectedCompanyId, refreshCompanies } = useCompanyScope();
   const [companies, setCompanies] = useState<Company[]>([]);
   const [selectedId, setSelectedId] = useState('');
   const [name, setName] = useState('');
@@ -31,7 +33,9 @@ export function CompanySettingsPage() {
       if (loadError) throw loadError;
       const rows = (data ?? []) as Company[];
       setCompanies(rows);
-      const selected = rows.find((company) => company.id === selectedId) ?? rows[0];
+      const selected = rows.find((company) => company.id === selectedCompanyId)
+        ?? rows.find((company) => company.id === selectedId)
+        ?? rows[0];
       if (selected) {
         setSelectedId(selected.id);
         setName(selected.name);
@@ -46,11 +50,12 @@ export function CompanySettingsPage() {
 
   useEffect(() => {
     load();
-  }, [profile]);
+  }, [profile, selectedCompanyId]);
 
   function handleSelect(companyId: string) {
     const selected = companies.find((company) => company.id === companyId);
     setSelectedId(companyId);
+    if (companyId) setSelectedCompanyId(companyId);
     if (selected) {
       setName(selected.name);
       setTimezone(selected.timezone);
@@ -68,10 +73,12 @@ export function CompanySettingsPage() {
         const { error: updateError } = await supabase.from('companies').update({ name, timezone }).eq('id', selectedId);
         if (updateError) throw updateError;
       } else {
-        const { error: insertError } = await supabase.from('companies').insert({ name, timezone });
+        const { data: inserted, error: insertError } = await supabase.from('companies').insert({ name, timezone }).select().single();
         if (insertError) throw insertError;
+        if (inserted?.id) setSelectedCompanyId(inserted.id);
       }
       setMessage('Company settings saved.');
+      await refreshCompanies();
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to save company');

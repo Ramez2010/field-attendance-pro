@@ -28,6 +28,9 @@ button:disabled { cursor: not-allowed; opacity: 0.65; }
 .brand-mark { width: 46px; height: 46px; display: grid; place-items: center; border-radius: 16px; background: linear-gradient(135deg, var(--forest), var(--forest-2)); color: white; font-weight: 900; letter-spacing: -0.04em; }
 .brand strong { display: block; font-weight: 900; }
 .brand span { color: var(--muted); font-size: 0.86rem; }
+.scope-selector { display: grid; gap: 7px; color: var(--muted); font-size: 0.78rem; font-weight: 900; text-transform: uppercase; letter-spacing: 0.08em; }
+.scope-selector select { width: 100%; border: 1px solid var(--line); border-radius: 15px; padding: 12px 13px; background: white; color: var(--ink); outline: none; font-weight: 800; text-transform: none; letter-spacing: 0; }
+.scope-selector select:focus { border-color: var(--forest); box-shadow: 0 0 0 4px rgba(15,91,77,0.1); }
 .nav-list { display: grid; gap: 6px; }
 .nav-link { display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-radius: 16px; color: var(--muted); text-decoration: none; font-weight: 750; }
 .nav-link.active, .nav-link:hover { background: var(--mint); color: var(--forest); }

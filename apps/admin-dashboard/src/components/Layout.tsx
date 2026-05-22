@@ -1,4 +1,4 @@
-﻿import { NavLink, Outlet } from 'react-router-dom';
+import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import {
   Building2,
   ClipboardList,
@@ -12,6 +12,8 @@ import {
 } from 'lucide-react';
 
 import { useAuth } from '../context/AuthContext';
+import { useCompanyScope } from '../context/CompanyScopeContext';
+import { ErrorState, LoadingState } from './State';
 
 const links = [
   { to: '/', label: 'Overview', icon: Gauge },
@@ -26,6 +28,9 @@ const links = [
 
 export function Layout() {
   const { profile, signOut } = useAuth();
+  const { companies, selectedCompanyId, selectedCompany, loading, error, setSelectedCompanyId } = useCompanyScope();
+  const location = useLocation();
+  const canManageCompanies = location.pathname === '/company';
 
   return (
     <div className="shell">
@@ -37,6 +42,16 @@ export function Layout() {
             <span>Admin Dashboard</span>
           </div>
         </div>
+        {profile?.role === 'super_admin' && (
+          <label className="scope-selector">
+            <span>Active company</span>
+            <select value={selectedCompanyId} onChange={(event) => setSelectedCompanyId(event.target.value)}>
+              {companies.map((company) => (
+                <option key={company.id} value={company.id}>{company.name}</option>
+              ))}
+            </select>
+          </label>
+        )}
         <nav className="nav-list">
           {links.map((link) => {
             const Icon = link.icon;
@@ -56,7 +71,15 @@ export function Layout() {
         </div>
       </aside>
       <main className="main-panel">
-        <Outlet />
+        {loading ? (
+          <LoadingState />
+        ) : error ? (
+          <ErrorState message={error} />
+        ) : !selectedCompany && !canManageCompanies ? (
+          <ErrorState message="Create or select a company before using the dashboard." />
+        ) : (
+          <Outlet />
+        )}
       </main>
     </div>
   );

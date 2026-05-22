@@ -6,6 +6,7 @@ import { StatCard } from '../components/StatCard';
 import { DataTable } from '../components/DataTable';
 import { ErrorState, LoadingState } from '../components/State';
 import { useAuth } from '../context/AuthContext';
+import { useCompanyScope } from '../context/CompanyScopeContext';
 import { endOfTodayIso, formatDateTime, startOfTodayIso } from '../lib/date';
 import { supabase } from '../lib/supabase';
 import { AttendanceRecordDetailed } from '../lib/types';
@@ -20,28 +21,25 @@ type DashboardStats = {
 
 export function DashboardPage() {
   const { profile } = useAuth();
+  const { selectedCompanyId, selectedCompany } = useCompanyScope();
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     async function load() {
-      if (!profile) return;
+      if (!profile || !selectedCompanyId) return;
+      setStats(null);
       setError(null);
       try {
-        let employeesQuery = supabase.from('employees').select('id', { count: 'exact', head: true }).eq('is_active', true);
-        let sitesQuery = supabase.from('sites').select('id', { count: 'exact', head: true }).eq('is_active', true);
-        let todayQuery = supabase
+        const employeesQuery = supabase.from('employees').select('id', { count: 'exact', head: true }).eq('is_active', true).eq('company_id', selectedCompanyId);
+        const sitesQuery = supabase.from('sites').select('id', { count: 'exact', head: true }).eq('is_active', true).eq('company_id', selectedCompanyId);
+        const todayQuery = supabase
           .from('attendance_records_detailed')
           .select('*')
+          .eq('company_id', selectedCompanyId)
           .gte('attendance_time', startOfTodayIso())
           .lt('attendance_time', endOfTodayIso())
           .order('attendance_time', { ascending: false });
-
-        if (profile.role !== 'super_admin') {
-          employeesQuery = employeesQuery.eq('company_id', profile.company_id);
-          sitesQuery = sitesQuery.eq('company_id', profile.company_id);
-          todayQuery = todayQuery.eq('company_id', profile.company_id);
-        }
 
         const [employees, sites, today] = await Promise.all([employeesQuery, sitesQuery, todayQuery.limit(100)]);
         if (employees.error) throw employees.error;
@@ -66,14 +64,14 @@ export function DashboardPage() {
     }
 
     load();
-  }, [profile]);
+  }, [profile, selectedCompanyId]);
 
   if (error) return <ErrorState message={error} />;
   if (!stats) return <LoadingState />;
 
   return (
     <>
-      <PageHeader title="Overview" eyebrow="Attendance operations" />
+      <PageHeader title="Overview" eyebrow={selectedCompany ? `${selectedCompany.name} operations` : 'Attendance operations'} />
       <section className="stats-grid">
         <StatCard label="Active employees" value={stats.employees} icon={<Users size={22} />} />
         <StatCard label="Active sites" value={stats.activeSites} icon={<MapPin size={22} />} />
