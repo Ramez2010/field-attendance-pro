@@ -14,6 +14,16 @@ type AuthContextValue = {
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
+const BOOTSTRAP_TIMEOUT_MS = 8000;
+
+async function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
+  return await Promise.race([
+    promise,
+    new Promise<T>((_, reject) => {
+      window.setTimeout(() => reject(new Error('Request timed out')), timeoutMs);
+    }),
+  ]);
+}
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
@@ -39,15 +49,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let mounted = true;
 
-    supabase.auth.getSession().then(async ({ data }) => {
-      if (!mounted) return;
-      setSession(data.session);
-      try {
-        await loadProfile(data.session);
-      } finally {
-        if (mounted) setLoading(false);
-      }
-    });
+    withTimeout(supabase.auth.getSession(), BOOTSTRAP_TIMEOUT_MS)
+      .then(async ({ data }) => {
+        if (!mounted) return;
+        setSession(data.session);
+        try {
+          await withTimeout(loadProfile(data.session), BOOTSTRAP_TIMEOUT_MS);
+        } finally {
+          if (mounted) setLoading(false);
+        }
+      })
+      .catch(() => {
+        if (!mounted) return;
+        setSession(null);
+        setProfile(null);
+        setLoading(false);
+      });
 
     const { data: listener } = supabase.auth.onAuthStateChange(async (_event, nextSession) => {
       setSession(nextSession);
