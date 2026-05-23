@@ -4,9 +4,11 @@ import { Layout } from './components/Layout';
 import { LoadingState } from './components/State';
 import { useAuth } from './context/AuthContext';
 import { AttendanceRulesPage } from './pages/AttendanceRulesPage';
+import { AttendanceHistoryPage } from './pages/AttendanceHistoryPage';
 import { CompanySettingsPage } from './pages/CompanySettingsPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { EmployeesPage } from './pages/EmployeesPage';
+import { GeofenceConfigPage } from './pages/GeofenceConfigPage';
 import { LoginPage } from './pages/LoginPage';
 import { MonitoringPage } from './pages/MonitoringPage';
 import { ReportsPage } from './pages/ReportsPage';
@@ -27,9 +29,11 @@ export function App() {
           <Route path="company" element={<CompanySettingsPage />} />
           <Route path="employees" element={<EmployeesPage />} />
           <Route path="sites" element={<SitesPage />} />
+          <Route path="geofence" element={<GeofenceConfigPage />} />
           <Route path="rules" element={<AttendanceRulesPage />} />
           <Route path="users" element={<UsersPage />} />
           <Route path="monitoring" element={<MonitoringPage />} />
+          <Route path="history" element={<AttendanceHistoryPage />} />
           <Route path="reports" element={<ReportsPage />} />
         </Route>
       </Route>

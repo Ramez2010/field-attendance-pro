@@ -1,6 +1,7 @@
 import { createContext, ReactNode, useContext, useEffect, useMemo, useState } from 'react';
 
 import { useAuth } from './AuthContext';
+import { getFriendlyErrorMessage } from '../lib/errors';
 import { supabase } from '../lib/supabase';
 import { Company } from '../lib/types';
 
@@ -53,7 +54,7 @@ export function CompanyScopeProvider({ children }: { children: ReactNode }) {
       setSelectedCompanyIdState(nextCompanyId);
       if (nextCompanyId) window.localStorage.setItem(STORAGE_KEY, nextCompanyId);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load companies');
+      setError(await getFriendlyErrorMessage(err, 'Failed to load companies'));
     } finally {
       setLoading(false);
     }

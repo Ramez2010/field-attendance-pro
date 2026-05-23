@@ -18,3 +18,4 @@ Thumbs.db
 
 # Local Supabase
 .supabase/
+supabase/.temp/

@@ -1,4 +1,4 @@
-﻿project_id = "field-attendance-pro"
+project_id = "field-attendance-pro"
 
 [functions.create-user]
 verify_jwt = true

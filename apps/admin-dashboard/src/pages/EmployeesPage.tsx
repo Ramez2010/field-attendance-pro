@@ -6,6 +6,7 @@ import { PageHeader } from '../components/PageHeader';
 import { ErrorState, LoadingState } from '../components/State';
 import { useAuth } from '../context/AuthContext';
 import { useCompanyScope } from '../context/CompanyScopeContext';
+import { getFriendlyErrorMessage } from '../lib/errors';
 import { exportExcel, getSpreadsheetValue, importSpreadsheetRows } from '../lib/export';
 import { supabase } from '../lib/supabase';
 import { Employee, Site } from '../lib/types';
@@ -64,7 +65,7 @@ export function EmployeesPage() {
       setEmployees((employeeResult.data ?? []) as Employee[]);
       setSites((siteResult.data ?? []) as Site[]);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load employees');
+      setError(await getFriendlyErrorMessage(err, 'Failed to load employees'));
     } finally {
       setLoading(false);
     }
@@ -115,16 +116,21 @@ export function EmployeesPage() {
       setForm(emptyForm);
       await load();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to save employee');
+      setError(await getFriendlyErrorMessage(err, 'Failed to save employee'));
     } finally {
       setSaving(false);
     }
   }
 
   async function toggleActive(employee: Employee) {
-    const { error: updateError } = await supabase.from('employees').update({ is_active: !employee.is_active }).eq('id', employee.id);
-    if (updateError) setError(updateError.message);
-    await load();
+    setError(null);
+    try {
+      const { error: updateError } = await supabase.from('employees').update({ is_active: !employee.is_active }).eq('id', employee.id);
+      if (updateError) throw updateError;
+      await load();
+    } catch (err) {
+      setError(await getFriendlyErrorMessage(err, 'Failed to update employee status'));
+    }
   }
 
   function exportEmployees() {
@@ -191,7 +197,7 @@ export function EmployeesPage() {
       setMessage(`Imported ${payload.length} employees.`);
       await load();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to import employees');
+      setError(await getFriendlyErrorMessage(err, 'Failed to import employees'));
     } finally {
       setImporting(false);
     }

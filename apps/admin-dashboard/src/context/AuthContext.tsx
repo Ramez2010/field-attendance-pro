@@ -1,6 +1,7 @@
 ﻿import { Session } from '@supabase/supabase-js';
 import { createContext, ReactNode, useContext, useEffect, useMemo, useState } from 'react';
 
+import { getFriendlyErrorMessage } from '../lib/errors';
 import { supabase } from '../lib/supabase';
 import { UserProfile } from '../lib/types';
 
@@ -99,7 +100,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     withTimeout(loadProfile(session), BOOTSTRAP_TIMEOUT_MS).catch((error) => {
       if (cancelled) return;
       setProfile(null);
-      setProfileError(error instanceof Error ? error.message : 'Failed to load admin profile');
+      void (async () => {
+        const message = await getFriendlyErrorMessage(error, 'Failed to load admin profile');
+        if (!cancelled) setProfileError(message);
+      })();
     });
 
     return () => {

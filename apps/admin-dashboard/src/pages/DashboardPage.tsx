@@ -8,6 +8,7 @@ import { ErrorState, LoadingState } from '../components/State';
 import { useAuth } from '../context/AuthContext';
 import { useCompanyScope } from '../context/CompanyScopeContext';
 import { endOfTodayIso, formatDateTime, startOfTodayIso } from '../lib/date';
+import { getFriendlyErrorMessage } from '../lib/errors';
 import { supabase } from '../lib/supabase';
 import { AttendanceRecordDetailed } from '../lib/types';
 
@@ -59,7 +60,7 @@ export function DashboardPage() {
           latest: (today.data as AttendanceRecordDetailed[]).slice(0, 8),
         });
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to load dashboard');
+        setError(await getFriendlyErrorMessage(err, 'Failed to load dashboard'));
       }
     }
 

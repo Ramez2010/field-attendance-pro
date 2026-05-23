@@ -8,6 +8,7 @@ import { ErrorState, LoadingState } from '../components/State';
 import { useAuth } from '../context/AuthContext';
 import { useCompanyScope } from '../context/CompanyScopeContext';
 import { formatDateTime } from '../lib/date';
+import { getFriendlyErrorMessage } from '../lib/errors';
 import { exportCsv, exportExcel } from '../lib/export';
 import { supabase } from '../lib/supabase';
 import { AttendanceRecordDetailed, Employee, Site } from '../lib/types';
@@ -59,7 +60,7 @@ export function ReportsPage() {
       setEmployees((employeeResult.data ?? []) as Employee[]);
       setSites((siteResult.data ?? []) as Site[]);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load report filters');
+      setError(await getFriendlyErrorMessage(err, 'Failed to load report filters'));
     } finally {
       setLoading(false);
     }
@@ -68,6 +69,10 @@ export function ReportsPage() {
   async function runReport(event?: FormEvent) {
     event?.preventDefault();
     if (!profile || !selectedCompanyId) return;
+    if (dateFrom > dateTo) {
+      setError('Date from cannot be after date to.');
+      return;
+    }
     setReportLoading(true);
     setError(null);
     try {
@@ -84,7 +89,7 @@ export function ReportsPage() {
       if (reportError) throw reportError;
       setRecords((data ?? []) as AttendanceRecordDetailed[]);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to run report');
+      setError(await getFriendlyErrorMessage(err, 'Failed to run report'));
     } finally {
       setReportLoading(false);
     }

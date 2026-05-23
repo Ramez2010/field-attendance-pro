@@ -1,6 +1,7 @@
 ﻿import { FormEvent, useState } from 'react';
 
 import { useAuth } from '../context/AuthContext';
+import { getFriendlyErrorMessage } from '../lib/errors';
 
 export function LoginPage() {
   const { signIn } = useAuth();
@@ -16,7 +17,7 @@ export function LoginPage() {
     try {
       await signIn(email, password);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to sign in');
+      setError(await getFriendlyErrorMessage(err, 'Failed to sign in'));
     } finally {
       setLoading(false);
     }

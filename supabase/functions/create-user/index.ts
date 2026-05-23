@@ -1,5 +1,6 @@
 ﻿import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { corsHeaders, jsonResponse } from '../_shared/cors.ts';
+import { readSupabaseFunctionEnv } from '../_shared/supabase-env.ts';
 
 type AppRole = 'super_admin' | 'company_admin' | 'employee';
 
@@ -24,9 +25,7 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const supabaseUrl = Deno.env.get('SUPABASE_URL');
-    const anonKey = Deno.env.get('SUPABASE_ANON_KEY');
-    const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+    const { supabaseUrl, anonKey, serviceRoleKey } = readSupabaseFunctionEnv();
 
     if (!supabaseUrl || !anonKey || !serviceRoleKey) {
       return jsonResponse({ error: 'Supabase function environment is not configured' }, 500);

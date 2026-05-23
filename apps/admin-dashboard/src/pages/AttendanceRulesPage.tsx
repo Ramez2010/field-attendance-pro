@@ -5,6 +5,7 @@ import { PageHeader } from '../components/PageHeader';
 import { ErrorState, LoadingState } from '../components/State';
 import { useAuth } from '../context/AuthContext';
 import { useCompanyScope } from '../context/CompanyScopeContext';
+import { getFriendlyErrorMessage } from '../lib/errors';
 import { supabase } from '../lib/supabase';
 import { AttendanceSettings } from '../lib/types';
 
@@ -52,7 +53,7 @@ export function AttendanceRulesPage() {
         setSettings(defaults);
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load attendance rules');
+      setError(await getFriendlyErrorMessage(err, 'Failed to load attendance rules'));
     } finally {
       setLoading(false);
     }
@@ -65,6 +66,10 @@ export function AttendanceRulesPage() {
   async function save(event: FormEvent) {
     event.preventDefault();
     if (!profile || !selectedCompanyId) return;
+    if (!Number.isFinite(settings.minimum_gps_accuracy) || Number(settings.minimum_gps_accuracy) <= 0) {
+      setError('Minimum GPS accuracy must be greater than 0.');
+      return;
+    }
     setSaving(true);
     setError(null);
     setMessage(null);
@@ -78,7 +83,7 @@ export function AttendanceRulesPage() {
       setMessage('Attendance rules saved.');
       await load();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to save attendance rules');
+      setError(await getFriendlyErrorMessage(err, 'Failed to save attendance rules'));
     } finally {
       setSaving(false);
     }

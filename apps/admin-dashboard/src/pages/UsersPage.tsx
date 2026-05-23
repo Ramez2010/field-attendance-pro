@@ -6,6 +6,7 @@ import { PageHeader } from '../components/PageHeader';
 import { ErrorState, LoadingState } from '../components/State';
 import { useAuth } from '../context/AuthContext';
 import { useCompanyScope } from '../context/CompanyScopeContext';
+import { getUserErrorMessage } from '../lib/errors';
 import { exportExcel, getSpreadsheetValue, importSpreadsheetRows } from '../lib/export';
 import { supabase } from '../lib/supabase';
 import { AppRole, Employee, UserProfile } from '../lib/types';
@@ -66,7 +67,7 @@ export function UsersPage() {
       setUsers((usersResult.data ?? []) as UserProfile[]);
       setEmployees((employeesResult.data ?? []) as Employee[]);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load users');
+      setError(await getUserErrorMessage(err, 'Failed to load users'));
     } finally {
       setLoading(false);
     }
@@ -92,6 +93,10 @@ export function UsersPage() {
   async function save(event: FormEvent) {
     event.preventDefault();
     if (!profile || !selectedCompanyId) return;
+    if (form.role === 'employee' && !form.employee_id) {
+      setError('Select an employee profile when role is Employee.');
+      return;
+    }
     setSaving(true);
     setError(null);
     setMessage(null);
@@ -118,18 +123,23 @@ export function UsersPage() {
       setForm(emptyForm);
       await load();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to save user');
+      setError(await getUserErrorMessage(err, 'Failed to save user'));
     } finally {
       setSaving(false);
     }
   }
 
   async function toggleActive(user: UserProfile) {
-    const { error: invokeError } = await supabase.functions.invoke('update-user', {
-      body: { user_id: user.id, is_active: !user.is_active },
-    });
-    if (invokeError) setError(invokeError.message);
-    await load();
+    setError(null);
+    try {
+      const { error: invokeError } = await supabase.functions.invoke('update-user', {
+        body: { user_id: user.id, is_active: !user.is_active },
+      });
+      if (invokeError) throw invokeError;
+      await load();
+    } catch (err) {
+      setError(await getUserErrorMessage(err, 'Failed to update user'));
+    }
   }
 
   function exportUsers() {
@@ -184,14 +194,17 @@ export function UsersPage() {
           },
         });
 
-        if (invokeError) throw new Error(`Row ${index + 2}: ${invokeError.message}`);
+        if (invokeError) {
+          const rowMessage = await getUserErrorMessage(invokeError, 'Failed to create user');
+          throw new Error(`Row ${index + 2}: ${rowMessage}`);
+        }
         createdCount += 1;
       }
 
       setMessage(`Imported ${createdCount} users.`);
       await load();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to import users');
+      setError(await getUserErrorMessage(err, 'Failed to import users'));
     } finally {
       setImporting(false);
     }

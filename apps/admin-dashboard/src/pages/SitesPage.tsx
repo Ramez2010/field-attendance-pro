@@ -6,6 +6,7 @@ import { PageHeader } from '../components/PageHeader';
 import { ErrorState, LoadingState } from '../components/State';
 import { useAuth } from '../context/AuthContext';
 import { useCompanyScope } from '../context/CompanyScopeContext';
+import { getFriendlyErrorMessage } from '../lib/errors';
 import { exportExcel, getSpreadsheetValue, importSpreadsheetRows } from '../lib/export';
 import { supabase } from '../lib/supabase';
 import { Site } from '../lib/types';
@@ -56,7 +57,7 @@ export function SitesPage() {
       if (loadError) throw loadError;
       setSites((data ?? []) as Site[]);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load sites');
+      setError(await getFriendlyErrorMessage(err, 'Failed to load sites'));
     } finally {
       setLoading(false);
     }
@@ -83,6 +84,21 @@ export function SitesPage() {
   async function save(event: FormEvent) {
     event.preventDefault();
     if (!profile || !selectedCompanyId) return;
+    const latitude = Number(form.latitude);
+    const longitude = Number(form.longitude);
+    const radius = Number(form.allowed_radius_meters);
+    if (!Number.isFinite(latitude) || latitude < -90 || latitude > 90) {
+      setError('Latitude must be between -90 and 90.');
+      return;
+    }
+    if (!Number.isFinite(longitude) || longitude < -180 || longitude > 180) {
+      setError('Longitude must be between -180 and 180.');
+      return;
+    }
+    if (!Number.isFinite(radius) || radius < 10 || radius > 10000) {
+      setError('Allowed radius must be between 10 and 10000 meters.');
+      return;
+    }
     setSaving(true);
     setError(null);
     setMessage(null);
@@ -91,9 +107,9 @@ export function SitesPage() {
         company_id: selectedCompanyId,
         name: form.name,
         address: form.address || null,
-        latitude: Number(form.latitude),
-        longitude: Number(form.longitude),
-        allowed_radius_meters: Number(form.allowed_radius_meters),
+        latitude,
+        longitude,
+        allowed_radius_meters: radius,
         is_active: form.is_active,
       };
       const { error: saveError } = form.id
@@ -104,7 +120,7 @@ export function SitesPage() {
       setForm(emptyForm);
       await load();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to save site');
+      setError(await getFriendlyErrorMessage(err, 'Failed to save site'));
     } finally {
       setSaving(false);
     }
@@ -112,9 +128,14 @@ export function SitesPage() {
 
   async function deleteSite(site: Site) {
     if (!confirm(`Delete ${site.name}? Use deactivate if attendance records already reference this site.`)) return;
-    const { error: deleteError } = await supabase.from('sites').delete().eq('id', site.id);
-    if (deleteError) setError(deleteError.message);
-    await load();
+    setError(null);
+    try {
+      const { error: deleteError } = await supabase.from('sites').delete().eq('id', site.id);
+      if (deleteError) throw deleteError;
+      await load();
+    } catch (err) {
+      setError(await getFriendlyErrorMessage(err, 'Failed to delete site'));
+    }
   }
 
   function exportSites() {
@@ -174,7 +195,7 @@ export function SitesPage() {
       setMessage(`Imported ${payload.length} sites.`);
       await load();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to import sites');
+      setError(await getFriendlyErrorMessage(err, 'Failed to import sites'));
     } finally {
       setImporting(false);
     }

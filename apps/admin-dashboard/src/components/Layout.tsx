@@ -3,10 +3,12 @@ import {
   Building2,
   ClipboardList,
   Gauge,
+  History,
   LogOut,
   MapPin,
   RadioTower,
   Settings,
+  Target,
   ShieldCheck,
   Users,
 } from 'lucide-react';
@@ -20,9 +22,11 @@ const links = [
   { to: '/company', label: 'Company', icon: Building2 },
   { to: '/employees', label: 'Employees', icon: Users },
   { to: '/sites', label: 'Sites', icon: MapPin },
+  { to: '/geofence', label: 'Geofence', icon: Target },
   { to: '/rules', label: 'Rules', icon: Settings },
   { to: '/users', label: 'Users', icon: ShieldCheck },
   { to: '/monitoring', label: 'Monitoring', icon: RadioTower },
+  { to: '/history', label: 'History', icon: History },
   { to: '/reports', label: 'Reports', icon: ClipboardList },
 ];
 

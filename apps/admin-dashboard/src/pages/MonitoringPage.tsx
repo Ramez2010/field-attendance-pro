@@ -8,6 +8,7 @@ import { ErrorState, LoadingState } from '../components/State';
 import { useAuth } from '../context/AuthContext';
 import { useCompanyScope } from '../context/CompanyScopeContext';
 import { endOfTodayIso, formatDateTime, startOfTodayIso } from '../lib/date';
+import { getFriendlyErrorMessage } from '../lib/errors';
 import { supabase } from '../lib/supabase';
 import { AttendanceRecordDetailed } from '../lib/types';
 
@@ -35,7 +36,7 @@ export function MonitoringPage() {
       if (loadError) throw loadError;
       setRecords((data ?? []) as AttendanceRecordDetailed[]);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load monitoring data');
+      setError(await getFriendlyErrorMessage(err, 'Failed to load monitoring data'));
     } finally {
       setLoading(false);
     }

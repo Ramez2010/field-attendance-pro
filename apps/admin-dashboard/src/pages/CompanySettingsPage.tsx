@@ -5,6 +5,7 @@ import { PageHeader } from '../components/PageHeader';
 import { ErrorState, LoadingState } from '../components/State';
 import { useAuth } from '../context/AuthContext';
 import { useCompanyScope } from '../context/CompanyScopeContext';
+import { getFriendlyErrorMessage } from '../lib/errors';
 import { supabase } from '../lib/supabase';
 import { Company } from '../lib/types';
 
@@ -42,7 +43,7 @@ export function CompanySettingsPage() {
         setTimezone(selected.timezone);
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load company settings');
+      setError(await getFriendlyErrorMessage(err, 'Failed to load company settings'));
     } finally {
       setLoading(false);
     }
@@ -81,7 +82,7 @@ export function CompanySettingsPage() {
       await refreshCompanies();
       await load();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to save company');
+      setError(await getFriendlyErrorMessage(err, 'Failed to save company'));
     } finally {
       setSaving(false);
     }
