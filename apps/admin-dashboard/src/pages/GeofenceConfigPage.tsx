@@ -3,6 +3,7 @@ import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { DataTable } from '../components/DataTable';
 import { Field, ToggleField } from '../components/FormField';
 import { PageHeader } from '../components/PageHeader';
+import { SitesGeofenceTabs } from '../components/SitesGeofenceTabs';
 import { ErrorState, LoadingState } from '../components/State';
 import { useAuth } from '../context/AuthContext';
 import { useCompanyScope } from '../context/CompanyScopeContext';
@@ -243,6 +244,7 @@ export function GeofenceConfigPage() {
   return (
     <>
       <PageHeader title="Geofence Configuration" eyebrow={selectedCompany ? `${selectedCompany.name} location policy` : 'Global and per-site geofence controls'} />
+      <SitesGeofenceTabs />
       <section className="split-grid">
         <div className="panel">
           <h2>Global geofence policy</h2>

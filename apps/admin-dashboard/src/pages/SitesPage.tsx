@@ -3,6 +3,7 @@ import { ChangeEvent, FormEvent, useEffect, useRef, useState } from 'react';
 import { DataTable } from '../components/DataTable';
 import { Field, TextArea, ToggleField } from '../components/FormField';
 import { PageHeader } from '../components/PageHeader';
+import { SitesGeofenceTabs } from '../components/SitesGeofenceTabs';
 import { ErrorState, LoadingState } from '../components/State';
 import { useAuth } from '../context/AuthContext';
 import { useCompanyScope } from '../context/CompanyScopeContext';
@@ -218,6 +219,7 @@ export function SitesPage() {
           </div>
         }
       />
+      <SitesGeofenceTabs />
       <section className="split-grid">
         <div className="panel">
           <h2>{form.id ? 'Edit site' : 'Add site'}</h2>

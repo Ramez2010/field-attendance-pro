@@ -8,7 +8,6 @@ import {
   MapPin,
   RadioTower,
   Settings,
-  Target,
   ShieldCheck,
   Users,
 } from 'lucide-react';
@@ -21,8 +20,7 @@ const links = [
   { to: '/', label: 'Overview', icon: Gauge },
   { to: '/company', label: 'Company', icon: Building2 },
   { to: '/employees', label: 'Employees', icon: Users },
-  { to: '/sites', label: 'Sites', icon: MapPin },
-  { to: '/geofence', label: 'Geofence', icon: Target },
+  { to: '/sites', label: 'Sites & Geofence', icon: MapPin, aliases: ['/geofence'] },
   { to: '/rules', label: 'Rules', icon: Settings },
   { to: '/users', label: 'Users', icon: ShieldCheck },
   { to: '/monitoring', label: 'Monitoring', icon: RadioTower },
@@ -59,8 +57,16 @@ export function Layout() {
         <nav className="nav-list">
           {links.map((link) => {
             const Icon = link.icon;
+            const aliasActive =
+              Array.isArray((link as { aliases?: string[] }).aliases)
+              && (link as { aliases?: string[] }).aliases?.some((alias) => location.pathname === alias || location.pathname.startsWith(`${alias}/`));
             return (
-              <NavLink key={link.to} to={link.to} className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`} end={link.to === '/'}>
+              <NavLink
+                key={link.to}
+                to={link.to}
+                className={({ isActive }) => `nav-link ${isActive || aliasActive ? 'active' : ''}`}
+                end={link.to === '/'}
+              >
                 <Icon size={18} />
                 {link.label}
               </NavLink>

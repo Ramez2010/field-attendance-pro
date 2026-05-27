@@ -47,6 +47,9 @@ button:disabled { cursor: not-allowed; opacity: 0.65; }
 h1 { margin: 4px 0 0; font-size: clamp(2rem, 4vw, 3.4rem); line-height: 1; letter-spacing: -0.06em; }
 h2 { margin: 0 0 16px; font-size: 1.2rem; }
 .page-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.section-tabs { display: inline-flex; gap: 6px; padding: 6px; border: 1px solid var(--line); border-radius: 16px; background: rgba(255, 255, 255, 0.7); margin-bottom: 16px; }
+.section-tab { text-decoration: none; color: var(--muted); font-weight: 850; padding: 8px 12px; border-radius: 12px; }
+.section-tab.active { background: var(--mint); color: var(--forest); }
 
 .panel, .stat-card, .state-card { background: rgba(255,255,255,0.88); border: 1px solid rgba(255,255,255,0.9); border-radius: 28px; box-shadow: var(--shadow); padding: 22px; margin-bottom: 18px; }
 .panel.narrow { max-width: 760px; }
