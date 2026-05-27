@@ -26,7 +26,7 @@ insert into public.attendance_settings (
 values (
   '00000000-0000-4000-8000-000000000003',
   '00000000-0000-4000-8000-000000000001',
-  true,
+  false,
   50,
   false,
   false,
