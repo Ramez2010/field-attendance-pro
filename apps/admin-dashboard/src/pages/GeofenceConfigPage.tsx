@@ -31,6 +31,7 @@ export function GeofenceConfigPage() {
   const [radiusDrafts, setRadiusDrafts] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [savingSettings, setSavingSettings] = useState(false);
+  const [deletingSettings, setDeletingSettings] = useState(false);
   const [savingSiteId, setSavingSiteId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -126,6 +127,50 @@ export function GeofenceConfigPage() {
     }
   }
 
+  async function deleteGeofencePolicy() {
+    if (!profile || !selectedCompanyId) return;
+    if (!settingsId) {
+      setSettings(defaults);
+      setMessage('No custom geofence policy to delete. Defaults are already active.');
+      return;
+    }
+    if (!confirm('Delete custom geofence policy and revert to defaults?')) return;
+
+    setDeletingSettings(true);
+    setError(null);
+    setMessage(null);
+    try {
+      const { error: deleteError } = await supabase
+        .from('attendance_settings')
+        .delete()
+        .eq('id', settingsId);
+
+      if (deleteError) {
+        const { error: fallbackError } = await supabase
+          .from('attendance_settings')
+          .update({
+            require_geofence: defaults.require_geofence,
+            minimum_gps_accuracy: defaults.minimum_gps_accuracy,
+            allow_check_in_outside_geofence: defaults.allow_check_in_outside_geofence,
+            allow_multiple_checkins_per_day: false,
+            require_notes: false,
+          })
+          .eq('id', settingsId);
+
+        if (fallbackError) throw deleteError;
+        setMessage('Custom geofence policy reset to defaults.');
+      } else {
+        setMessage('Custom geofence policy deleted.');
+      }
+
+      await load();
+    } catch (err) {
+      setError(await getFriendlyErrorMessage(err, 'Failed to delete geofence policy'));
+    } finally {
+      setDeletingSettings(false);
+    }
+  }
+
   async function saveSiteRadius(site: Site) {
     const value = radiusDrafts[site.id] ?? '';
     const radius = Number(value);
@@ -147,6 +192,46 @@ export function GeofenceConfigPage() {
       await load();
     } catch (err) {
       setError(await getFriendlyErrorMessage(err, `Failed to update ${site.name} radius`));
+    } finally {
+      setSavingSiteId(null);
+    }
+  }
+
+  async function toggleSiteStatus(site: Site) {
+    setSavingSiteId(site.id);
+    setError(null);
+    setMessage(null);
+    try {
+      const { error: updateError } = await supabase
+        .from('sites')
+        .update({ is_active: !site.is_active })
+        .eq('id', site.id);
+      if (updateError) throw updateError;
+      setMessage(`${site.name} ${site.is_active ? 'deactivated' : 'activated'}.`);
+      await load();
+    } catch (err) {
+      setError(await getFriendlyErrorMessage(err, `Failed to update ${site.name} status`));
+    } finally {
+      setSavingSiteId(null);
+    }
+  }
+
+  async function deleteSiteGeofence(site: Site) {
+    if (!confirm(`Delete "${site.name}" geofence/site? If attendance records exist, deletion may be blocked.`)) return;
+
+    setSavingSiteId(site.id);
+    setError(null);
+    setMessage(null);
+    try {
+      const { error: deleteError } = await supabase
+        .from('sites')
+        .delete()
+        .eq('id', site.id);
+      if (deleteError) throw deleteError;
+      setMessage(`${site.name} deleted.`);
+      await load();
+    } catch (err) {
+      setError(await getFriendlyErrorMessage(err, `Failed to delete ${site.name}. You can deactivate it instead.`));
     } finally {
       setSavingSiteId(null);
     }
@@ -180,7 +265,14 @@ export function GeofenceConfigPage() {
               checked={settings.allow_check_in_outside_geofence}
               onChange={(value) => setSettings({ ...settings, allow_check_in_outside_geofence: value })}
             />
-            <button className="primary-button" disabled={savingSettings}>{savingSettings ? 'Saving...' : 'Save geofence policy'}</button>
+            <div className="button-row">
+              <button className="primary-button" disabled={savingSettings || deletingSettings}>
+                {savingSettings ? 'Saving...' : 'Save geofence policy'}
+              </button>
+              <button type="button" className="secondary-button" onClick={deleteGeofencePolicy} disabled={savingSettings || deletingSettings}>
+                {deletingSettings ? 'Deleting...' : 'Delete policy'}
+              </button>
+            </div>
           </form>
         </div>
         <div className="panel">
@@ -216,13 +308,29 @@ export function GeofenceConfigPage() {
             {
               header: 'Action',
               cell: (row) => (
-                <button
-                  className="secondary-button"
-                  onClick={() => void saveSiteRadius(row)}
-                  disabled={savingSiteId === row.id}
-                >
-                  {savingSiteId === row.id ? 'Saving...' : 'Save radius'}
-                </button>
+                <div className="table-actions">
+                  <button
+                    className="secondary-button"
+                    onClick={() => void saveSiteRadius(row)}
+                    disabled={savingSiteId === row.id}
+                  >
+                    {savingSiteId === row.id ? 'Saving...' : 'Save radius'}
+                  </button>
+                  <button
+                    className="link-button"
+                    onClick={() => void toggleSiteStatus(row)}
+                    disabled={savingSiteId === row.id}
+                  >
+                    {row.is_active ? 'Deactivate' : 'Activate'}
+                  </button>
+                  <button
+                    className="link-button danger-text"
+                    onClick={() => void deleteSiteGeofence(row)}
+                    disabled={savingSiteId === row.id}
+                  >
+                    Delete
+                  </button>
+                </div>
               ),
             },
           ]}
