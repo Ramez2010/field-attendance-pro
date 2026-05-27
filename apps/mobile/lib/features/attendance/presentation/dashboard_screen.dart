@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/app_theme.dart';
@@ -25,7 +25,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     _future = _load();
   }
 
-  Future<AttendanceContext> _load() => ref.read(attendanceRepositoryProvider).loadContext();
+  Future<AttendanceContext> _load() =>
+      ref.read(attendanceRepositoryProvider).loadContext();
 
   Future<void> _refresh() async {
     final next = _load();
@@ -37,7 +38,10 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   Widget build(BuildContext context) {
     return ScreenScaffold(
       title: 'Dashboard',
-      action: IconButton(onPressed: _refresh, icon: const Icon(Icons.refresh_rounded)),
+      action: IconButton(
+        onPressed: _refresh,
+        icon: const Icon(Icons.refresh_rounded),
+      ),
       child: FutureBuilder<AttendanceContext>(
         future: _future,
         builder: (context, snapshot) {
@@ -45,7 +49,10 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             return const Center(child: CircularProgressIndicator());
           }
           if (snapshot.hasError) {
-            return AsyncStateView(message: snapshot.error.toString(), onRetry: _refresh);
+            return AsyncStateView(
+              message: snapshot.error.toString(),
+              onRetry: _refresh,
+            );
           }
 
           final data = snapshot.requireData;
@@ -56,24 +63,38 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               children: [
                 _HeroCard(data: data),
                 const SizedBox(height: 14),
-                InfoCard(title: 'Assigned site', value: data.site.name, icon: Icons.apartment_rounded),
+                InfoCard(
+                  title: 'Assigned site',
+                  value: data.site?.name ?? 'Not assigned',
+                  icon: Icons.apartment_rounded,
+                ),
                 InfoCard(
                   title: 'Geofence radius',
-                  value: '${data.site.allowedRadiusMeters.toStringAsFixed(0)} meters',
+                  value: data.site == null
+                      ? 'Not set'
+                      : '${data.site!.allowedRadiusMeters.toStringAsFixed(0)} meters',
                   icon: Icons.radio_button_checked_rounded,
                 ),
                 InfoCard(
                   title: 'GPS accuracy required',
-                  value: '<= ${data.settings.minimumGpsAccuracy.toStringAsFixed(0)} meters',
+                  value:
+                      '<= ${data.settings.minimumGpsAccuracy.toStringAsFixed(0)} meters',
                   icon: Icons.gps_fixed_rounded,
                 ),
                 const SizedBox(height: 12),
-                Text('Today', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900)),
+                Text(
+                  'Today',
+                  style: Theme.of(
+                    context,
+                  ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
+                ),
                 const SizedBox(height: 10),
                 if (data.todayRecords.isEmpty)
                   const _EmptyTodayCard()
                 else
-                  ...data.todayRecords.map((record) => _RecordTile(record: record)),
+                  ...data.todayRecords.map(
+                    (record) => _RecordTile(record: record),
+                  ),
               ],
             ),
           );
@@ -104,10 +125,19 @@ class _HeroCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Hello, ${data.employee.fullName}', style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w900)),
+          Text(
+            'Hello, ${data.employee.fullName}',
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 22,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
           const SizedBox(height: 8),
           Text(
-            checkedIn ? 'You are currently checked in.' : 'You are not checked in yet.',
+            checkedIn
+                ? 'You are currently checked in.'
+                : 'You are not checked in yet.',
             style: const TextStyle(color: Colors.white70, fontSize: 16),
           ),
           const SizedBox(height: 18),
@@ -119,7 +149,11 @@ class _HeroCard extends StatelessWidget {
             ),
             child: Text(
               checkedIn ? 'ACTIVE SHIFT' : 'READY TO CHECK IN',
-              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, letterSpacing: 0.8),
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w900,
+                letterSpacing: 0.8,
+              ),
             ),
           ),
         ],
@@ -154,10 +188,18 @@ class _RecordTile extends StatelessWidget {
       child: ListTile(
         leading: CircleAvatar(
           backgroundColor: isIn ? AppTheme.mint : const Color(0xFFFFF4DB),
-          child: Icon(isIn ? Icons.login_rounded : Icons.logout_rounded, color: isIn ? AppTheme.forest : AppTheme.amber),
+          child: Icon(
+            isIn ? Icons.login_rounded : Icons.logout_rounded,
+            color: isIn ? AppTheme.forest : AppTheme.amber,
+          ),
         ),
-        title: Text(record.label, style: const TextStyle(fontWeight: FontWeight.w800)),
-        subtitle: Text('${record.formattedTime} - ${record.distanceFromSite.toStringAsFixed(0)}m from site'),
+        title: Text(
+          record.label,
+          style: const TextStyle(fontWeight: FontWeight.w800),
+        ),
+        subtitle: Text(
+          '${record.formattedTime} - ${record.distanceFromSite.toStringAsFixed(0)}m from site',
+        ),
       ),
     );
   }

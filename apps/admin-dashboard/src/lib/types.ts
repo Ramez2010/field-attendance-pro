@@ -36,8 +36,8 @@ export type Site = {
   company_id: string;
   name: string;
   address: string | null;
-  latitude: number;
-  longitude: number;
+  latitude: number | null;
+  longitude: number | null;
   allowed_radius_meters: number;
   is_active: boolean;
   created_at: string;

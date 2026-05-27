@@ -1,4 +1,4 @@
-﻿import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/errors/app_exception.dart';
@@ -19,22 +19,27 @@ class AttendanceRepository {
     final userId = _client.auth.currentUser?.id;
     if (userId == null) throw const AppException('You are not signed in.');
 
-    final profileJson = await _client.from('users').select().eq('id', userId).single();
-    final profile = AppUserProfile.fromJson(Map<String, dynamic>.from(profileJson));
+    final profileJson = await _client
+        .from('users')
+        .select()
+        .eq('id', userId)
+        .single();
+    final profile = AppUserProfile.fromJson(
+      Map<String, dynamic>.from(profileJson),
+    );
 
     if (profile.employeeId == null) {
-      throw const AppException('This mobile app is for employee accounts only.');
+      throw const AppException(
+        'This mobile app is for employee accounts only.',
+      );
     }
 
-    final employeeJson = await _client.from('employees').select().eq('id', profile.employeeId!).single();
+    final employeeJson = await _client
+        .from('employees')
+        .select()
+        .eq('id', profile.employeeId!)
+        .single();
     final employee = Employee.fromJson(Map<String, dynamic>.from(employeeJson));
-
-    if (employee.assignedSiteId == null) {
-      throw const AppException('No active work site is assigned to your profile.');
-    }
-
-    final siteJson = await _client.from('sites').select().eq('id', employee.assignedSiteId!).single();
-    final site = Site.fromJson(Map<String, dynamic>.from(siteJson));
 
     final settingsJson = await _client
         .from('attendance_settings')
@@ -44,6 +49,24 @@ class AttendanceRepository {
     final settings = settingsJson == null
         ? AttendanceSettings.defaults
         : AttendanceSettings.fromJson(Map<String, dynamic>.from(settingsJson));
+
+    Site? site;
+    if (employee.assignedSiteId != null) {
+      final siteJson = await _client
+          .from('sites')
+          .select()
+          .eq('id', employee.assignedSiteId!)
+          .maybeSingle();
+      if (siteJson != null) {
+        site = Site.fromJson(Map<String, dynamic>.from(siteJson));
+      }
+    }
+
+    if (settings.requireGeofence && site == null) {
+      throw const AppException(
+        'Geofence is enabled, but no active work site is assigned to your profile.',
+      );
+    }
 
     final records = await listTodayRecords(employee.id);
 
@@ -70,7 +93,9 @@ class AttendanceRepository {
         .order('attendance_time', ascending: false);
 
     return data
-        .map<AttendanceRecord>((json) => AttendanceRecord.fromJson(Map<String, dynamic>.from(json)))
+        .map<AttendanceRecord>(
+          (json) => AttendanceRecord.fromJson(Map<String, dynamic>.from(json)),
+        )
         .toList();
   }
 
@@ -78,9 +103,15 @@ class AttendanceRepository {
     final userId = _client.auth.currentUser?.id;
     if (userId == null) throw const AppException('You are not signed in.');
 
-    final profileJson = await _client.from('users').select('employee_id').eq('id', userId).single();
+    final profileJson = await _client
+        .from('users')
+        .select('employee_id')
+        .eq('id', userId)
+        .single();
     final employeeId = profileJson['employee_id']?.toString();
-    if (employeeId == null) throw const AppException('Employee profile was not found.');
+    if (employeeId == null) {
+      throw const AppException('Employee profile was not found.');
+    }
 
     final data = await _client
         .from('attendance_records')
@@ -90,7 +121,9 @@ class AttendanceRepository {
         .limit(limit);
 
     return data
-        .map<AttendanceRecord>((json) => AttendanceRecord.fromJson(Map<String, dynamic>.from(json)))
+        .map<AttendanceRecord>(
+          (json) => AttendanceRecord.fromJson(Map<String, dynamic>.from(json)),
+        )
         .toList();
   }
 

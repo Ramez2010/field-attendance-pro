@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/app_theme.dart';
@@ -26,7 +26,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     _future = _load();
   }
 
-  Future<AttendanceContext> _load() => ref.read(attendanceRepositoryProvider).loadContext();
+  Future<AttendanceContext> _load() =>
+      ref.read(attendanceRepositoryProvider).loadContext();
 
   Future<void> _refresh() async {
     final next = _load();
@@ -51,7 +52,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             return const Center(child: CircularProgressIndicator());
           }
           if (snapshot.hasError) {
-            return AsyncStateView(message: snapshot.error.toString(), onRetry: _refresh);
+            return AsyncStateView(
+              message: snapshot.error.toString(),
+              onRetry: _refresh,
+            );
           }
 
           final data = snapshot.requireData;
@@ -68,16 +72,27 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                         const CircleAvatar(
                           radius: 32,
                           backgroundColor: AppTheme.mint,
-                          child: Icon(Icons.person_rounded, color: AppTheme.forest, size: 34),
+                          child: Icon(
+                            Icons.person_rounded,
+                            color: AppTheme.forest,
+                            size: 34,
+                          ),
                         ),
                         const SizedBox(width: 16),
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(data.employee.fullName, style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900)),
+                              Text(
+                                data.employee.fullName,
+                                style: Theme.of(context).textTheme.titleLarge
+                                    ?.copyWith(fontWeight: FontWeight.w900),
+                              ),
                               const SizedBox(height: 4),
-                              Text(data.employee.employeeCode, style: const TextStyle(color: Colors.black54)),
+                              Text(
+                                data.employee.employeeCode,
+                                style: const TextStyle(color: Colors.black54),
+                              ),
                             ],
                           ),
                         ),
@@ -85,15 +100,35 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                     ),
                   ),
                 ),
-                InfoCard(title: 'Email', value: data.employee.email ?? data.profile.email, icon: Icons.mail_outline_rounded),
-                InfoCard(title: 'Phone', value: data.employee.phone ?? 'Not set', icon: Icons.phone_outlined),
-                InfoCard(title: 'Department', value: data.employee.department ?? 'Not set', icon: Icons.badge_outlined),
-                InfoCard(title: 'Assigned site', value: data.site.name, icon: Icons.place_outlined),
+                InfoCard(
+                  title: 'Email',
+                  value: data.employee.email ?? data.profile.email,
+                  icon: Icons.mail_outline_rounded,
+                ),
+                InfoCard(
+                  title: 'Phone',
+                  value: data.employee.phone ?? 'Not set',
+                  icon: Icons.phone_outlined,
+                ),
+                InfoCard(
+                  title: 'Department',
+                  value: data.employee.department ?? 'Not set',
+                  icon: Icons.badge_outlined,
+                ),
+                InfoCard(
+                  title: 'Assigned site',
+                  value: data.site?.name ?? 'Not assigned',
+                  icon: Icons.place_outlined,
+                ),
                 const SizedBox(height: 18),
                 OutlinedButton.icon(
                   onPressed: _isSigningOut ? null : _signOut,
                   icon: _isSigningOut
-                      ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
                       : const Icon(Icons.logout_rounded),
                   label: const Text('Sign out'),
                 ),

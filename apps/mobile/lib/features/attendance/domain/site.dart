@@ -16,8 +16,8 @@ class Site {
   final String companyId;
   final String name;
   final String? address;
-  final double latitude;
-  final double longitude;
+  final double? latitude;
+  final double? longitude;
   final double allowedRadiusMeters;
   final bool isActive;
 
@@ -27,10 +27,16 @@ class Site {
       companyId: readString(json['company_id']),
       name: readString(json['name']),
       address: readNullableString(json['address']),
-      latitude: readDouble(json['latitude']),
-      longitude: readDouble(json['longitude']),
+      latitude: _readNullableDouble(json['latitude']),
+      longitude: _readNullableDouble(json['longitude']),
       allowedRadiusMeters: readDouble(json['allowed_radius_meters']),
       isActive: readBool(json['is_active'], fallback: true),
     );
+  }
+
+  static double? _readNullableDouble(Object? value) {
+    if (value == null) return null;
+    if (value is num) return value.toDouble();
+    return double.tryParse(value.toString());
   }
 }

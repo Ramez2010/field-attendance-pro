@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/errors/app_exception.dart';
@@ -39,7 +39,8 @@ class _CheckInOutScreenState extends ConsumerState<CheckInOutScreen> {
     super.dispose();
   }
 
-  Future<AttendanceContext> _load() => ref.read(attendanceRepositoryProvider).loadContext();
+  Future<AttendanceContext> _load() =>
+      ref.read(attendanceRepositoryProvider).loadContext();
 
   Future<void> _refresh() async {
     final next = _load();
@@ -48,7 +49,9 @@ class _CheckInOutScreenState extends ConsumerState<CheckInOutScreen> {
   }
 
   Future<void> _submit(AttendanceContext contextData) async {
-    final checkType = contextData.isCheckedIn ? AttendanceCheckType.checkOut : AttendanceCheckType.checkIn;
+    final checkType = contextData.isCheckedIn
+        ? AttendanceCheckType.checkOut
+        : AttendanceCheckType.checkIn;
     final notes = _notesController.text.trim();
 
     if (contextData.settings.requireNotes && notes.isEmpty) {
@@ -66,31 +69,48 @@ class _CheckInOutScreenState extends ConsumerState<CheckInOutScreen> {
     });
 
     try {
-      final position = await ref.read(locationServiceProvider).currentPosition();
+      final position = await ref
+          .read(locationServiceProvider)
+          .currentPosition();
       if (position.accuracy > contextData.settings.minimumGpsAccuracy) {
         throw AppException(
           'GPS accuracy is ${position.accuracy.toStringAsFixed(0)}m. Required accuracy is ${contextData.settings.minimumGpsAccuracy.toStringAsFixed(0)}m or better.',
         );
       }
 
-      final geofence = GeofenceCalculator.validate(
-        currentLatitude: position.latitude,
-        currentLongitude: position.longitude,
-        siteLatitude: contextData.site.latitude,
-        siteLongitude: contextData.site.longitude,
-        allowedRadiusMeters: contextData.site.allowedRadiusMeters,
-      );
+      final site = contextData.site;
+      if (contextData.settings.requireGeofence) {
+        if (site == null) {
+          throw const AppException(
+            'Geofence is enabled, but no site is assigned to your profile. Contact your admin.',
+          );
+        }
+        if (site.latitude == null || site.longitude == null) {
+          throw AppException(
+            'Geofence is enabled, but "${site.name}" has no coordinates configured. Contact your admin.',
+          );
+        }
 
-      if (contextData.settings.requireGeofence &&
-          !contextData.settings.allowCheckInOutsideGeofence &&
-          !geofence.isInside) {
-        throw AppException(
-          'You are ${geofence.distanceMeters.toStringAsFixed(0)}m from ${contextData.site.name}. Allowed radius is ${contextData.site.allowedRadiusMeters.toStringAsFixed(0)}m.',
+        final geofence = GeofenceCalculator.validate(
+          currentLatitude: position.latitude,
+          currentLongitude: position.longitude,
+          siteLatitude: site.latitude!,
+          siteLongitude: site.longitude!,
+          allowedRadiusMeters: site.allowedRadiusMeters,
         );
+
+        if (!contextData.settings.allowCheckInOutsideGeofence &&
+            !geofence.isInside) {
+          throw AppException(
+            'You are ${geofence.distanceMeters.toStringAsFixed(0)}m from ${site.name}. Allowed radius is ${site.allowedRadiusMeters.toStringAsFixed(0)}m.',
+          );
+        }
       }
 
       final device = await ref.read(deviceInfoServiceProvider).currentDevice();
-      final record = await ref.read(attendanceRepositoryProvider).recordAttendance(
+      final record = await ref
+          .read(attendanceRepositoryProvider)
+          .recordAttendance(
             checkType: checkType,
             latitude: position.latitude,
             longitude: position.longitude,
@@ -101,7 +121,9 @@ class _CheckInOutScreenState extends ConsumerState<CheckInOutScreen> {
           );
 
       _notesController.clear();
-      setState(() => _success = '${record.label} saved at ${record.formattedTime}.');
+      setState(
+        () => _success = '${record.label} saved at ${record.formattedTime}.',
+      );
       await _refresh();
     } catch (error) {
       setState(() => _error = error.toString());
@@ -114,7 +136,10 @@ class _CheckInOutScreenState extends ConsumerState<CheckInOutScreen> {
   Widget build(BuildContext context) {
     return ScreenScaffold(
       title: 'Attendance',
-      action: IconButton(onPressed: _refresh, icon: const Icon(Icons.refresh_rounded)),
+      action: IconButton(
+        onPressed: _refresh,
+        icon: const Icon(Icons.refresh_rounded),
+      ),
       child: FutureBuilder<AttendanceContext>(
         future: _future,
         builder: (context, snapshot) {
@@ -122,7 +147,10 @@ class _CheckInOutScreenState extends ConsumerState<CheckInOutScreen> {
             return const Center(child: CircularProgressIndicator());
           }
           if (snapshot.hasError) {
-            return AsyncStateView(message: snapshot.error.toString(), onRetry: _refresh);
+            return AsyncStateView(
+              message: snapshot.error.toString(),
+              onRetry: _refresh,
+            );
           }
 
           final data = snapshot.requireData;
@@ -138,28 +166,38 @@ class _CheckInOutScreenState extends ConsumerState<CheckInOutScreen> {
                   minLines: 2,
                   maxLines: 4,
                   decoration: InputDecoration(
-                    labelText: data.settings.requireNotes ? 'Notes required' : 'Notes optional',
+                    labelText: data.settings.requireNotes
+                        ? 'Notes required'
+                        : 'Notes optional',
                     alignLabelWithHint: true,
                   ),
                 ),
                 const SizedBox(height: 18),
-                if (_error != null) _MessageCard(message: _error!, isError: true),
-                if (_success != null) _MessageCard(message: _success!, isError: false),
+                if (_error != null)
+                  _MessageCard(message: _error!, isError: true),
+                if (_success != null)
+                  _MessageCard(message: _success!, isError: false),
                 const SizedBox(height: 18),
                 SizedBox(
                   height: 92,
                   child: PrimaryButton(
                     label: data.isCheckedIn ? 'Check out' : 'Check in',
-                    icon: data.isCheckedIn ? Icons.logout_rounded : Icons.login_rounded,
+                    icon: data.isCheckedIn
+                        ? Icons.logout_rounded
+                        : Icons.login_rounded,
                     isLoading: _isSubmitting,
-                    backgroundColor: data.isCheckedIn ? AppTheme.amber : AppTheme.forest,
+                    backgroundColor: data.isCheckedIn
+                        ? AppTheme.amber
+                        : AppTheme.forest,
                     onPressed: () => _submit(data),
                   ),
                 ),
                 const SizedBox(height: 14),
                 Text(
-                  'The app validates GPS permission, accuracy, geofence distance, device session, and attendance sequence before saving.',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.black54),
+                  'The app validates GPS permission, accuracy, device session, and attendance sequence before saving. Geofence checks are applied only when enabled.',
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodySmall?.copyWith(color: Colors.black54),
                   textAlign: TextAlign.center,
                 ),
               ],
@@ -188,9 +226,13 @@ class _StatusPanel extends StatelessWidget {
               children: [
                 CircleAvatar(
                   radius: 26,
-                  backgroundColor: data.isCheckedIn ? AppTheme.mint : const Color(0xFFFFF4DB),
+                  backgroundColor: data.isCheckedIn
+                      ? AppTheme.mint
+                      : const Color(0xFFFFF4DB),
                   child: Icon(
-                    data.isCheckedIn ? Icons.verified_rounded : Icons.pending_actions_rounded,
+                    data.isCheckedIn
+                        ? Icons.verified_rounded
+                        : Icons.pending_actions_rounded,
                     color: data.isCheckedIn ? AppTheme.forest : AppTheme.amber,
                   ),
                 ),
@@ -201,18 +243,39 @@ class _StatusPanel extends StatelessWidget {
                     children: [
                       Text(
                         data.isCheckedIn ? 'Checked in' : 'Ready to check in',
-                        style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
+                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.w900,
+                        ),
                       ),
-                      Text(data.site.name, style: const TextStyle(color: Colors.black54)),
+                      Text(
+                        data.site?.name ?? 'No assigned site',
+                        style: const TextStyle(color: Colors.black54),
+                      ),
                     ],
                   ),
                 ),
               ],
             ),
             const SizedBox(height: 18),
-            _RuleLine(label: 'Allowed radius', value: '${data.site.allowedRadiusMeters.toStringAsFixed(0)}m'),
-            _RuleLine(label: 'GPS accuracy', value: '<= ${data.settings.minimumGpsAccuracy.toStringAsFixed(0)}m'),
-            _RuleLine(label: 'Outside geofence', value: data.settings.allowCheckInOutsideGeofence ? 'Allowed' : 'Blocked'),
+            _RuleLine(
+              label: 'Allowed radius',
+              value: data.site == null
+                  ? '-'
+                  : '${data.site!.allowedRadiusMeters.toStringAsFixed(0)}m',
+            ),
+            _RuleLine(
+              label: 'GPS accuracy',
+              value:
+                  '<= ${data.settings.minimumGpsAccuracy.toStringAsFixed(0)}m',
+            ),
+            _RuleLine(
+              label: 'Outside geofence',
+              value: data.settings.requireGeofence
+                  ? (data.settings.allowCheckInOutsideGeofence
+                        ? 'Allowed'
+                        : 'Blocked')
+                  : 'Not required',
+            ),
           ],
         ),
       ),
@@ -256,7 +319,10 @@ class _MessageCard extends StatelessWidget {
         color: isError ? const Color(0xFFFFEDEB) : AppTheme.mint,
         borderRadius: BorderRadius.circular(16),
       ),
-      child: Text(message, style: TextStyle(color: isError ? AppTheme.danger : AppTheme.forest)),
+      child: Text(
+        message,
+        style: TextStyle(color: isError ? AppTheme.danger : AppTheme.forest),
+      ),
     );
   }
 }

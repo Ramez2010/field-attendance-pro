@@ -75,8 +75,8 @@ export function SitesPage() {
       id: site.id,
       name: site.name,
       address: site.address ?? '',
-      latitude: String(site.latitude),
-      longitude: String(site.longitude),
+      latitude: site.latitude == null ? '' : String(site.latitude),
+      longitude: site.longitude == null ? '' : String(site.longitude),
       allowed_radius_meters: String(site.allowed_radius_meters),
       is_active: site.is_active,
     });
@@ -88,14 +88,26 @@ export function SitesPage() {
     const latitude = Number(form.latitude);
     const longitude = Number(form.longitude);
     const radius = Number(form.allowed_radius_meters);
-    if (!Number.isFinite(latitude) || latitude < -90 || latitude > 90) {
+
+    const latitudeText = form.latitude.trim();
+    const longitudeText = form.longitude.trim();
+    const hasLatitude = latitudeText.length > 0;
+    const hasLongitude = longitudeText.length > 0;
+
+    if (hasLatitude != hasLongitude) {
+      setError('Enter both latitude and longitude, or leave both empty.');
+      return;
+    }
+
+    if (hasLatitude && (!Number.isFinite(latitude) || latitude < -90 || latitude > 90)) {
       setError('Latitude must be between -90 and 90.');
       return;
     }
-    if (!Number.isFinite(longitude) || longitude < -180 || longitude > 180) {
+    if (hasLongitude && (!Number.isFinite(longitude) || longitude < -180 || longitude > 180)) {
       setError('Longitude must be between -180 and 180.');
       return;
     }
+
     if (!Number.isFinite(radius) || radius < 10 || radius > 10000) {
       setError('Allowed radius must be between 10 and 10000 meters.');
       return;
@@ -108,8 +120,8 @@ export function SitesPage() {
         company_id: selectedCompanyId,
         name: form.name,
         address: form.address || null,
-        latitude,
-        longitude,
+        latitude: hasLatitude ? latitude : null,
+        longitude: hasLongitude ? longitude : null,
         allowed_radius_meters: radius,
         is_active: form.is_active,
       };
@@ -144,8 +156,8 @@ export function SitesPage() {
       sites.map((site) => ({
         name: site.name,
         address: site.address ?? '',
-        latitude: site.latitude,
-        longitude: site.longitude,
+        latitude: site.latitude ?? '',
+        longitude: site.longitude ?? '',
         allowed_radius_meters: site.allowed_radius_meters,
         is_active: site.is_active ? 'true' : 'false',
       })),
@@ -168,13 +180,21 @@ export function SitesPage() {
 
       const payload = rows.map((row, index) => {
         const name = getSpreadsheetValue(row, ['name', 'site_name']);
-        const latitude = Number(getSpreadsheetValue(row, ['latitude', 'lat']));
-        const longitude = Number(getSpreadsheetValue(row, ['longitude', 'lng', 'lon']));
+        const latitudeValue = getSpreadsheetValue(row, ['latitude', 'lat']);
+        const longitudeValue = getSpreadsheetValue(row, ['longitude', 'lng', 'lon']);
+        const hasLatitude = latitudeValue.trim().length > 0;
+        const hasLongitude = longitudeValue.trim().length > 0;
+        if (hasLatitude != hasLongitude) {
+          throw new Error(`Row ${index + 2}: provide both latitude and longitude, or leave both empty.`);
+        }
+
+        const latitude = hasLatitude ? Number(latitudeValue) : null;
+        const longitude = hasLongitude ? Number(longitudeValue) : null;
         const radius = Number(getSpreadsheetValue(row, ['allowed_radius_meters', 'radius', 'radius_meters']) || 100);
 
         if (!name) throw new Error(`Row ${index + 2}: name is required.`);
-        if (!Number.isFinite(latitude) || latitude < -90 || latitude > 90) throw new Error(`Row ${index + 2}: latitude is invalid.`);
-        if (!Number.isFinite(longitude) || longitude < -180 || longitude > 180) throw new Error(`Row ${index + 2}: longitude is invalid.`);
+        if (latitude != null && (!Number.isFinite(latitude) || latitude < -90 || latitude > 90)) throw new Error(`Row ${index + 2}: latitude is invalid.`);
+        if (longitude != null && (!Number.isFinite(longitude) || longitude < -180 || longitude > 180)) throw new Error(`Row ${index + 2}: longitude is invalid.`);
         if (!Number.isFinite(radius) || radius < 10 || radius > 10000) throw new Error(`Row ${index + 2}: allowed_radius_meters must be between 10 and 10000.`);
 
         return {
@@ -226,8 +246,8 @@ export function SitesPage() {
           <form onSubmit={save} className="form-stack">
             <Field label="Site name" value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} required />
             <TextArea label="Address" value={form.address} onChange={(event) => setForm({ ...form, address: event.target.value })} rows={3} />
-            <Field label="Latitude" type="number" step="0.0000001" value={form.latitude} onChange={(event) => setForm({ ...form, latitude: event.target.value })} required />
-            <Field label="Longitude" type="number" step="0.0000001" value={form.longitude} onChange={(event) => setForm({ ...form, longitude: event.target.value })} required />
+            <Field label="Latitude (optional)" type="number" step="0.0000001" value={form.latitude} onChange={(event) => setForm({ ...form, latitude: event.target.value })} />
+            <Field label="Longitude (optional)" type="number" step="0.0000001" value={form.longitude} onChange={(event) => setForm({ ...form, longitude: event.target.value })} />
             <Field label="Allowed radius meters" type="number" min={10} max={10000} value={form.allowed_radius_meters} onChange={(event) => setForm({ ...form, allowed_radius_meters: event.target.value })} required />
             <ToggleField label="Active site" checked={form.is_active} onChange={(value) => setForm({ ...form, is_active: value })} />
             {error && <div className="inline-error">{error}</div>}
@@ -244,7 +264,13 @@ export function SitesPage() {
             rows={sites}
             columns={[
               { header: 'Name', cell: (row) => row.name },
-              { header: 'Coordinates', cell: (row) => `${Number(row.latitude).toFixed(5)}, ${Number(row.longitude).toFixed(5)}` },
+              {
+                header: 'Coordinates',
+                cell: (row) =>
+                  row.latitude == null || row.longitude == null
+                    ? '-'
+                    : `${Number(row.latitude).toFixed(5)}, ${Number(row.longitude).toFixed(5)}`,
+              },
               { header: 'Radius', cell: (row) => `${row.allowed_radius_meters}m` },
               { header: 'Status', cell: (row) => <span className={`pill ${row.is_active ? 'active' : 'inactive'}`}>{row.is_active ? 'active' : 'inactive'}</span> },
               {

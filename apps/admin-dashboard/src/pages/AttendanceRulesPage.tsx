@@ -10,7 +10,7 @@ import { supabase } from '../lib/supabase';
 import { AttendanceSettings } from '../lib/types';
 
 const defaults = {
-  require_geofence: true,
+  require_geofence: false,
   minimum_gps_accuracy: 50,
   allow_check_in_outside_geofence: false,
   allow_multiple_checkins_per_day: false,

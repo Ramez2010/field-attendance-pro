@@ -1,4 +1,4 @@
-﻿import 'app_user_profile.dart';
+import 'app_user_profile.dart';
 import 'attendance_record.dart';
 import 'attendance_settings.dart';
 import 'employee.dart';
@@ -15,11 +15,13 @@ class AttendanceContext {
 
   final AppUserProfile profile;
   final Employee employee;
-  final Site site;
+  final Site? site;
   final AttendanceSettings settings;
   final List<AttendanceRecord> todayRecords;
 
-  AttendanceRecord? get latestRecord => todayRecords.isEmpty ? null : todayRecords.first;
+  AttendanceRecord? get latestRecord =>
+      todayRecords.isEmpty ? null : todayRecords.first;
 
-  bool get isCheckedIn => latestRecord?.checkType == AttendanceCheckType.checkIn;
+  bool get isCheckedIn =>
+      latestRecord?.checkType == AttendanceCheckType.checkIn;
 }

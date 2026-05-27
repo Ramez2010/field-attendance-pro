@@ -18,7 +18,7 @@ type GeofenceSettingsForm = {
 };
 
 const defaults: GeofenceSettingsForm = {
-  require_geofence: true,
+  require_geofence: false,
   minimum_gps_accuracy: 50,
   allow_check_in_outside_geofence: false,
 };

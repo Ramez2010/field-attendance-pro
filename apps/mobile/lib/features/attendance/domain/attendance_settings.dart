@@ -1,4 +1,4 @@
-﻿import '../../../core/utils/json_readers.dart';
+import '../../../core/utils/json_readers.dart';
 
 class AttendanceSettings {
   const AttendanceSettings({
@@ -16,7 +16,7 @@ class AttendanceSettings {
   final bool requireNotes;
 
   static const defaults = AttendanceSettings(
-    requireGeofence: true,
+    requireGeofence: false,
     minimumGpsAccuracy: 50,
     allowCheckInOutsideGeofence: false,
     allowMultipleCheckinsPerDay: false,
@@ -25,10 +25,17 @@ class AttendanceSettings {
 
   factory AttendanceSettings.fromJson(Map<String, dynamic> json) {
     return AttendanceSettings(
-      requireGeofence: readBool(json['require_geofence'], fallback: true),
-      minimumGpsAccuracy: readDouble(json['minimum_gps_accuracy'], fallback: 50),
-      allowCheckInOutsideGeofence: readBool(json['allow_check_in_outside_geofence']),
-      allowMultipleCheckinsPerDay: readBool(json['allow_multiple_checkins_per_day']),
+      requireGeofence: readBool(json['require_geofence'], fallback: false),
+      minimumGpsAccuracy: readDouble(
+        json['minimum_gps_accuracy'],
+        fallback: 50,
+      ),
+      allowCheckInOutsideGeofence: readBool(
+        json['allow_check_in_outside_geofence'],
+      ),
+      allowMultipleCheckinsPerDay: readBool(
+        json['allow_multiple_checkins_per_day'],
+      ),
       requireNotes: readBool(json['require_notes']),
     );
   }
