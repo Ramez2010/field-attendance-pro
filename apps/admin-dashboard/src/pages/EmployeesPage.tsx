@@ -7,10 +7,10 @@ import { PageHeader } from '../components/PageHeader';
 import { ErrorState, LoadingState } from '../components/State';
 import { useAuth } from '../context/AuthContext';
 import { useCompanyScope } from '../context/CompanyScopeContext';
-import { getFriendlyErrorMessage } from '../lib/errors';
+import { getFriendlyErrorMessage, getUserErrorMessage } from '../lib/errors';
 import { exportExcel, getSpreadsheetValue, importSpreadsheetRows } from '../lib/export';
 import { supabase } from '../lib/supabase';
-import { Employee, EmployeeSiteAssignment, Site } from '../lib/types';
+import { AppRole, Employee, EmployeeSiteAssignment, Site, UserProfile } from '../lib/types';
 
 type EmployeeForm = {
   id?: string;
@@ -22,6 +22,11 @@ type EmployeeForm = {
   assigned_site_id: string;
   assigned_site_ids: string[];
   is_active: boolean;
+  create_login_user: boolean;
+  login_email: string;
+  login_password: string;
+  login_role: AppRole;
+  login_is_active: boolean;
 };
 
 const emptyForm: EmployeeForm = {
@@ -33,6 +38,11 @@ const emptyForm: EmployeeForm = {
   assigned_site_id: '',
   assigned_site_ids: [],
   is_active: true,
+  create_login_user: false,
+  login_email: '',
+  login_password: '',
+  login_role: 'employee',
+  login_is_active: true,
 };
 
 const employeeImportHeaders = [
@@ -51,6 +61,7 @@ export function EmployeesPage() {
   const { selectedCompanyId, selectedCompany } = useCompanyScope();
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [sites, setSites] = useState<Site[]>([]);
+  const [usersByEmployeeId, setUsersByEmployeeId] = useState<Record<string, UserProfile>>({});
   const [employeeSiteMap, setEmployeeSiteMap] = useState<Record<string, string[]>>({});
   const [employeePrimarySiteMap, setEmployeePrimarySiteMap] = useState<Record<string, string | null>>({});
   const [form, setForm] = useState<EmployeeForm>(emptyForm);
@@ -71,6 +82,14 @@ export function EmployeesPage() {
     [siteOptions, form.assigned_site_ids],
   );
 
+  const loginRoleOptions = useMemo(
+    () => [
+      { label: 'employee', value: 'employee' },
+      { label: 'company admin', value: 'company_admin' },
+    ],
+    [],
+  );
+
   async function load() {
     if (!profile || !selectedCompanyId) return;
     setLoading(true);
@@ -81,11 +100,16 @@ export function EmployeesPage() {
       const assignmentsQuery = supabase
         .from('employee_site_assignments')
         .select('employee_id,site_id,is_primary,created_at');
+      const usersQuery = supabase
+        .from('users')
+        .select('id,company_id,employee_id,role,email,is_active,created_at')
+        .eq('company_id', selectedCompanyId);
 
-      const [employeeResult, siteResult, assignmentsResult] = await Promise.all([employeeQuery, siteQuery, assignmentsQuery]);
+      const [employeeResult, siteResult, assignmentsResult, usersResult] = await Promise.all([employeeQuery, siteQuery, assignmentsQuery, usersQuery]);
       if (employeeResult.error) throw employeeResult.error;
       if (siteResult.error) throw siteResult.error;
       if (assignmentsResult.error) throw assignmentsResult.error;
+      if (usersResult.error) throw usersResult.error;
 
       const employeeRows = (employeeResult.data ?? []) as Employee[];
       const assignmentRows = (assignmentsResult.data ?? []) as EmployeeSiteAssignment[];
@@ -115,6 +139,14 @@ export function EmployeesPage() {
       setSites((siteResult.data ?? []) as Site[]);
       setEmployeeSiteMap(nextSiteMap);
       setEmployeePrimarySiteMap(nextPrimaryMap);
+
+      const nextUsersByEmployeeId: Record<string, UserProfile> = {};
+      for (const user of (usersResult.data ?? []) as UserProfile[]) {
+        if (user.employee_id && !nextUsersByEmployeeId[user.employee_id]) {
+          nextUsersByEmployeeId[user.employee_id] = user;
+        }
+      }
+      setUsersByEmployeeId(nextUsersByEmployeeId);
     } catch (err) {
       setError(await getFriendlyErrorMessage(err, 'Failed to load employees'));
     } finally {
@@ -135,6 +167,7 @@ export function EmployeesPage() {
       ?? employee.assigned_site_id
       ?? assignedSiteIds[0]
       ?? '';
+    const linkedUser = usersByEmployeeId[employee.id];
 
     setForm({
       id: employee.id,
@@ -146,6 +179,11 @@ export function EmployeesPage() {
       assigned_site_id: primarySiteId,
       assigned_site_ids: assignedSiteIds,
       is_active: employee.is_active,
+      create_login_user: false,
+      login_email: linkedUser?.email ?? employee.email ?? '',
+      login_password: '',
+      login_role: linkedUser?.role ?? 'employee',
+      login_is_active: linkedUser?.is_active ?? true,
     });
   }
 
@@ -173,6 +211,24 @@ export function EmployeesPage() {
   async function save(event: FormEvent) {
     event.preventDefault();
     if (!profile || !selectedCompanyId) return;
+
+    const existingLinkedUser = form.id ? usersByEmployeeId[form.id] : null;
+    if (form.create_login_user && existingLinkedUser) {
+      setError('This employee already has a login user. Open the Users tab to edit it.');
+      return;
+    }
+
+    if (form.create_login_user) {
+      if (!form.login_email.trim()) {
+        setError('Login email is required when creating a linked user.');
+        return;
+      }
+      if (form.login_password.trim().length < 8) {
+        setError('Temporary login password must be at least 8 characters.');
+        return;
+      }
+    }
+
     setSaving(true);
     setError(null);
     setMessage(null);
@@ -217,7 +273,32 @@ export function EmployeesPage() {
         if (assignmentsUpsertError) throw assignmentsUpsertError;
       }
 
-      setMessage(form.id ? 'Employee updated.' : 'Employee created.');
+      let createdLinkedUser = false;
+      if (form.create_login_user) {
+        const { error: createUserError } = await supabase.functions.invoke('create-user', {
+          body: {
+            email: form.login_email.trim().toLowerCase(),
+            password: form.login_password.trim(),
+            role: form.login_role,
+            company_id: selectedCompanyId,
+            employee_id: employeeId,
+            is_active: form.login_is_active,
+          },
+        });
+
+        if (createUserError) {
+          const userMessage = await getUserErrorMessage(createUserError, 'Failed to create login user');
+          throw new Error(`Employee saved, but login user was not created. ${userMessage}`);
+        }
+
+        createdLinkedUser = true;
+      }
+
+      setMessage(
+        form.id
+          ? (createdLinkedUser ? 'Employee updated and login user created.' : 'Employee updated.')
+          : (createdLinkedUser ? 'Employee and login user created.' : 'Employee created.'),
+      );
       setForm(emptyForm);
       await load();
     } catch (err) {
@@ -449,6 +530,50 @@ export function EmployeesPage() {
               onChange={(event) => setForm((prev) => ({ ...prev, assigned_site_id: event.target.value }))}
             />
             <ToggleField label="Active employee" checked={form.is_active} onChange={(value) => setForm({ ...form, is_active: value })} />
+            {form.id && usersByEmployeeId[form.id] && (
+              <div className="inline-success">
+                Linked login user: {usersByEmployeeId[form.id].email}. Use the Users tab to edit password/role.
+              </div>
+            )}
+            {(!form.id || !usersByEmployeeId[form.id]) && (
+              <>
+                <ToggleField
+                  label="Create linked login user"
+                  checked={form.create_login_user}
+                  onChange={(value) => setForm({ ...form, create_login_user: value })}
+                />
+                {form.create_login_user && (
+                  <>
+                    <Field
+                      label="Login email"
+                      type="email"
+                      value={form.login_email}
+                      onChange={(event) => setForm({ ...form, login_email: event.target.value })}
+                      required
+                    />
+                    <Field
+                      label="Temporary password"
+                      type="password"
+                      minLength={8}
+                      value={form.login_password}
+                      onChange={(event) => setForm({ ...form, login_password: event.target.value })}
+                      required
+                    />
+                    <SelectField
+                      label="Login role"
+                      value={form.login_role}
+                      options={loginRoleOptions}
+                      onChange={(event) => setForm((prev) => ({ ...prev, login_role: event.target.value as AppRole }))}
+                    />
+                    <ToggleField
+                      label="Active login user"
+                      checked={form.login_is_active}
+                      onChange={(value) => setForm({ ...form, login_is_active: value })}
+                    />
+                  </>
+                )}
+              </>
+            )}
             {error && <div className="inline-error">{error}</div>}
             {message && <div className="inline-success">{message}</div>}
             <div className="button-row">
@@ -465,6 +590,7 @@ export function EmployeesPage() {
               { header: 'Code', cell: (row) => row.employee_code },
               { header: 'Name', cell: (row) => row.full_name },
               { header: 'Department', cell: (row) => row.department ?? '-' },
+              { header: 'Login user', cell: (row) => usersByEmployeeId[row.id]?.email ?? '-' },
               {
                 header: 'Sites',
                 cell: (row) => {
