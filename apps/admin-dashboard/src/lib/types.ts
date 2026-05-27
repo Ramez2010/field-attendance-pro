@@ -31,6 +31,13 @@ export type Employee = {
   created_at: string;
 };
 
+export type EmployeeSiteAssignment = {
+  employee_id: string;
+  site_id: string;
+  is_primary: boolean;
+  created_at: string;
+};
+
 export type Site = {
   id: string;
   company_id: string;

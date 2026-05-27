@@ -85,6 +85,10 @@ h2 { margin: 0 0 16px; font-size: 1.2rem; }
 .inline-success { background: var(--mint); color: var(--forest); }
 .danger-text { color: var(--danger); }
 .hidden-file-input { display: none; }
+.multi-checklist { border: 1px solid var(--line); border-radius: 15px; background: white; padding: 10px 12px; display: grid; gap: 8px; max-height: 190px; overflow: auto; }
+.multi-checklist-row { display: flex; align-items: center; gap: 10px; font-weight: 700; color: var(--ink); }
+.multi-checklist-row input { width: 18px; height: 18px; accent-color: var(--forest); }
+.muted-note { color: var(--muted); font-size: 0.9rem; }
 
 .table-wrap { width: 100%; overflow-x: auto; border-radius: 20px; border: 1px solid var(--line); background: white; }
 table { width: 100%; border-collapse: collapse; min-width: 760px; }

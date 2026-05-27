@@ -9,7 +9,7 @@ import { useCompanyScope } from '../context/CompanyScopeContext';
 import { getFriendlyErrorMessage } from '../lib/errors';
 import { exportExcel, getSpreadsheetValue, importSpreadsheetRows } from '../lib/export';
 import { supabase } from '../lib/supabase';
-import { Employee, Site } from '../lib/types';
+import { Employee, EmployeeSiteAssignment, Site } from '../lib/types';
 
 type EmployeeForm = {
   id?: string;
@@ -19,6 +19,7 @@ type EmployeeForm = {
   email: string;
   department: string;
   assigned_site_id: string;
+  assigned_site_ids: string[];
   is_active: boolean;
 };
 
@@ -29,16 +30,28 @@ const emptyForm: EmployeeForm = {
   email: '',
   department: '',
   assigned_site_id: '',
+  assigned_site_ids: [],
   is_active: true,
 };
 
-const employeeImportHeaders = ['employee_code', 'full_name', 'phone', 'email', 'department', 'assigned_site', 'is_active'];
+const employeeImportHeaders = [
+  'employee_code',
+  'full_name',
+  'phone',
+  'email',
+  'department',
+  'assigned_sites',
+  'assigned_site',
+  'is_active',
+];
 
 export function EmployeesPage() {
   const { profile } = useAuth();
   const { selectedCompanyId, selectedCompany } = useCompanyScope();
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [sites, setSites] = useState<Site[]>([]);
+  const [employeeSiteMap, setEmployeeSiteMap] = useState<Record<string, string[]>>({});
+  const [employeePrimarySiteMap, setEmployeePrimarySiteMap] = useState<Record<string, string | null>>({});
   const [form, setForm] = useState<EmployeeForm>(emptyForm);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -52,6 +65,11 @@ export function EmployeesPage() {
     [sites],
   );
 
+  const selectedSiteOptions = useMemo(
+    () => siteOptions.filter((option) => form.assigned_site_ids.includes(option.value)),
+    [siteOptions, form.assigned_site_ids],
+  );
+
   async function load() {
     if (!profile || !selectedCompanyId) return;
     setLoading(true);
@@ -59,11 +77,43 @@ export function EmployeesPage() {
     try {
       const employeeQuery = supabase.from('employees').select('*').eq('company_id', selectedCompanyId).order('created_at', { ascending: false });
       const siteQuery = supabase.from('sites').select('*').eq('company_id', selectedCompanyId).eq('is_active', true).order('name');
-      const [employeeResult, siteResult] = await Promise.all([employeeQuery, siteQuery]);
+      const assignmentsQuery = supabase
+        .from('employee_site_assignments')
+        .select('employee_id,site_id,is_primary,created_at');
+
+      const [employeeResult, siteResult, assignmentsResult] = await Promise.all([employeeQuery, siteQuery, assignmentsQuery]);
       if (employeeResult.error) throw employeeResult.error;
       if (siteResult.error) throw siteResult.error;
-      setEmployees((employeeResult.data ?? []) as Employee[]);
+      if (assignmentsResult.error) throw assignmentsResult.error;
+
+      const employeeRows = (employeeResult.data ?? []) as Employee[];
+      const assignmentRows = (assignmentsResult.data ?? []) as EmployeeSiteAssignment[];
+
+      const nextSiteMap: Record<string, string[]> = {};
+      const nextPrimaryMap: Record<string, string | null> = {};
+      for (const employee of employeeRows) {
+        const list: string[] = [];
+        if (employee.assigned_site_id) list.push(employee.assigned_site_id);
+        nextSiteMap[employee.id] = list;
+        nextPrimaryMap[employee.id] = employee.assigned_site_id;
+      }
+
+      for (const assignment of assignmentRows) {
+        if (!nextSiteMap[assignment.employee_id]) {
+          nextSiteMap[assignment.employee_id] = [];
+        }
+        if (!nextSiteMap[assignment.employee_id].includes(assignment.site_id)) {
+          nextSiteMap[assignment.employee_id].push(assignment.site_id);
+        }
+        if (assignment.is_primary) {
+          nextPrimaryMap[assignment.employee_id] = assignment.site_id;
+        }
+      }
+
+      setEmployees(employeeRows);
       setSites((siteResult.data ?? []) as Site[]);
+      setEmployeeSiteMap(nextSiteMap);
+      setEmployeePrimarySiteMap(nextPrimaryMap);
     } catch (err) {
       setError(await getFriendlyErrorMessage(err, 'Failed to load employees'));
     } finally {
@@ -74,10 +124,17 @@ export function EmployeesPage() {
   useEffect(() => {
     setForm(emptyForm);
     setMessage(null);
-    load();
+    void load();
   }, [profile, selectedCompanyId]);
 
   function edit(employee: Employee) {
+    const assignedSiteIds = employeeSiteMap[employee.id]?.slice()
+      ?? (employee.assigned_site_id ? [employee.assigned_site_id] : []);
+    const primarySiteId = employeePrimarySiteMap[employee.id]
+      ?? employee.assigned_site_id
+      ?? assignedSiteIds[0]
+      ?? '';
+
     setForm({
       id: employee.id,
       employee_code: employee.employee_code,
@@ -85,8 +142,30 @@ export function EmployeesPage() {
       phone: employee.phone ?? '',
       email: employee.email ?? '',
       department: employee.department ?? '',
-      assigned_site_id: employee.assigned_site_id ?? '',
+      assigned_site_id: primarySiteId,
+      assigned_site_ids: assignedSiteIds,
       is_active: employee.is_active,
+    });
+  }
+
+  function toggleFormSite(siteId: string, checked: boolean) {
+    setForm((prev) => {
+      const nextAssignedIds = checked
+        ? Array.from(new Set([...prev.assigned_site_ids, siteId]))
+        : prev.assigned_site_ids.filter((id) => id !== siteId);
+
+      let nextPrimary = prev.assigned_site_id;
+      if (nextAssignedIds.length === 0) {
+        nextPrimary = '';
+      } else if (!nextAssignedIds.includes(nextPrimary)) {
+        nextPrimary = nextAssignedIds[0];
+      }
+
+      return {
+        ...prev,
+        assigned_site_ids: nextAssignedIds,
+        assigned_site_id: nextPrimary,
+      };
     });
   }
 
@@ -97,6 +176,11 @@ export function EmployeesPage() {
     setError(null);
     setMessage(null);
     try {
+      const assignedSiteIds = Array.from(new Set(form.assigned_site_ids.filter(Boolean)));
+      const primarySiteId = assignedSiteIds.includes(form.assigned_site_id)
+        ? form.assigned_site_id
+        : (assignedSiteIds[0] ?? null);
+
       const payload = {
         company_id: selectedCompanyId,
         employee_code: form.employee_code,
@@ -104,14 +188,34 @@ export function EmployeesPage() {
         phone: form.phone || null,
         email: form.email || null,
         department: form.department || null,
-        assigned_site_id: form.assigned_site_id || null,
+        assigned_site_id: primarySiteId,
         is_active: form.is_active,
       };
 
-      const { error: saveError } = form.id
-        ? await supabase.from('employees').update(payload).eq('id', form.id)
-        : await supabase.from('employees').insert(payload);
-      if (saveError) throw saveError;
+      const saveResult = form.id
+        ? await supabase.from('employees').update(payload).eq('id', form.id).select('id').single()
+        : await supabase.from('employees').insert(payload).select('id').single();
+      if (saveResult.error) throw saveResult.error;
+
+      const employeeId = String(saveResult.data.id);
+      const { error: clearAssignmentsError } = await supabase
+        .from('employee_site_assignments')
+        .delete()
+        .eq('employee_id', employeeId);
+      if (clearAssignmentsError) throw clearAssignmentsError;
+
+      if (assignedSiteIds.length > 0) {
+        const assignmentRows = assignedSiteIds.map((siteId) => ({
+          employee_id: employeeId,
+          site_id: siteId,
+          is_primary: siteId === primarySiteId,
+        }));
+        const { error: assignmentsUpsertError } = await supabase
+          .from('employee_site_assignments')
+          .upsert(assignmentRows, { onConflict: 'employee_id,site_id' });
+        if (assignmentsUpsertError) throw assignmentsUpsertError;
+      }
+
       setMessage(form.id ? 'Employee updated.' : 'Employee created.');
       setForm(emptyForm);
       await load();
@@ -135,15 +239,25 @@ export function EmployeesPage() {
 
   function exportEmployees() {
     exportExcel(
-      employees.map((employee) => ({
-        employee_code: employee.employee_code,
-        full_name: employee.full_name,
-        phone: employee.phone ?? '',
-        email: employee.email ?? '',
-        department: employee.department ?? '',
-        assigned_site: sites.find((site) => site.id === employee.assigned_site_id)?.name ?? '',
-        is_active: employee.is_active ? 'true' : 'false',
-      })),
+      employees.map((employee) => {
+        const assignedSiteIds = employeeSiteMap[employee.id] ?? (employee.assigned_site_id ? [employee.assigned_site_id] : []);
+        const assignedSiteNames = assignedSiteIds
+          .map((siteId) => sites.find((site) => site.id === siteId)?.name ?? siteId)
+          .filter(Boolean);
+        const primarySiteId = employeePrimarySiteMap[employee.id] ?? employee.assigned_site_id;
+        const primarySiteName = primarySiteId ? (sites.find((site) => site.id === primarySiteId)?.name ?? primarySiteId) : '';
+
+        return {
+          employee_code: employee.employee_code,
+          full_name: employee.full_name,
+          phone: employee.phone ?? '',
+          email: employee.email ?? '',
+          department: employee.department ?? '',
+          assigned_sites: assignedSiteNames.join(', '),
+          assigned_site: primarySiteName,
+          is_active: employee.is_active ? 'true' : 'false',
+        };
+      }),
       `${selectedCompany?.name ?? 'company'}-employees`,
       employeeImportHeaders,
     );
@@ -164,37 +278,118 @@ export function EmployeesPage() {
       const sitesByName = new Map(sites.map((site) => [site.name.trim().toLowerCase(), site.id]));
       const sitesById = new Map(sites.map((site) => [site.id, site.id]));
 
-      const payload = rows.map((row, index) => {
+      function resolveSiteId(raw: string): string | null {
+        const value = raw.trim();
+        if (!value) return null;
+        return sitesById.get(value) ?? sitesByName.get(value.toLowerCase()) ?? null;
+      }
+
+      function resolveMultipleSites(raw: string): string[] {
+        if (!raw.trim()) return [];
+        const tokens = raw.split(/[;,|]/g).map((token) => token.trim()).filter(Boolean);
+        const resolved = tokens.map((token) => ({ token, id: resolveSiteId(token) }));
+        const failed = resolved.find((item) => item.id == null);
+        if (failed) {
+          throw new Error(`Site "${failed.token}" was not found in the selected company.`);
+        }
+        return Array.from(new Set(resolved.map((item) => item.id!)));
+      }
+
+      const parsedRows = rows.map((row, index) => {
         const employeeCode = getSpreadsheetValue(row, ['employee_code', 'code']);
         const fullName = getSpreadsheetValue(row, ['full_name', 'name']);
         if (!employeeCode || !fullName) {
           throw new Error(`Row ${index + 2}: employee_code and full_name are required.`);
         }
 
-        const siteValue = getSpreadsheetValue(row, ['assigned_site', 'site', 'site_name', 'assigned_site_id']);
-        const assignedSiteId = sitesById.get(siteValue) ?? sitesByName.get(siteValue.trim().toLowerCase()) ?? null;
-        if (siteValue && !assignedSiteId) {
-          throw new Error(`Row ${index + 2}: assigned_site "${siteValue}" was not found in the selected company.`);
+        const multiSitesRaw = getSpreadsheetValue(row, ['assigned_sites', 'sites']);
+        const primarySiteRaw = getSpreadsheetValue(row, ['assigned_site', 'site', 'site_name', 'assigned_site_id']);
+
+        let assignedSiteIds: string[];
+        try {
+          assignedSiteIds = resolveMultipleSites(multiSitesRaw);
+        } catch (err) {
+          throw new Error(`Row ${index + 2}: ${(err as Error).message}`);
         }
 
+        const primarySiteId = resolveSiteId(primarySiteRaw);
+        if (primarySiteRaw && !primarySiteId) {
+          throw new Error(`Row ${index + 2}: assigned_site "${primarySiteRaw}" was not found in the selected company.`);
+        }
+
+        if (primarySiteId && !assignedSiteIds.includes(primarySiteId)) {
+          assignedSiteIds = [primarySiteId, ...assignedSiteIds];
+        }
+
+        const normalizedPrimarySiteId = primarySiteId ?? assignedSiteIds[0] ?? null;
+
         return {
-          company_id: selectedCompanyId,
           employee_code: employeeCode,
           full_name: fullName,
           phone: getSpreadsheetValue(row, ['phone']) || null,
           email: getSpreadsheetValue(row, ['email']) || null,
           department: getSpreadsheetValue(row, ['department']) || null,
-          assigned_site_id: assignedSiteId,
+          assigned_site_id: normalizedPrimarySiteId,
+          assigned_site_ids: assignedSiteIds,
           is_active: parseBoolean(getSpreadsheetValue(row, ['is_active', 'active']), true),
         };
       });
 
+      const employeePayload = parsedRows.map((row) => ({
+        company_id: selectedCompanyId,
+        employee_code: row.employee_code,
+        full_name: row.full_name,
+        phone: row.phone,
+        email: row.email,
+        department: row.department,
+        assigned_site_id: row.assigned_site_id,
+        is_active: row.is_active,
+      }));
+
       const { error: importError } = await supabase
         .from('employees')
-        .upsert(payload, { onConflict: 'company_id,employee_code' });
+        .upsert(employeePayload, { onConflict: 'company_id,employee_code' });
       if (importError) throw importError;
 
-      setMessage(`Imported ${payload.length} employees.`);
+      const codes = parsedRows.map((row) => row.employee_code);
+      const { data: importedEmployees, error: fetchImportedError } = await supabase
+        .from('employees')
+        .select('id,employee_code')
+        .eq('company_id', selectedCompanyId)
+        .in('employee_code', codes);
+      if (fetchImportedError) throw fetchImportedError;
+
+      const employeeIdByCode = new Map(
+        (importedEmployees ?? []).map((row) => [String(row.employee_code), String(row.id)]),
+      );
+
+      const targetEmployeeIds = Array.from(employeeIdByCode.values());
+      if (targetEmployeeIds.length > 0) {
+        const { error: clearAssignmentsError } = await supabase
+          .from('employee_site_assignments')
+          .delete()
+          .in('employee_id', targetEmployeeIds);
+        if (clearAssignmentsError) throw clearAssignmentsError;
+
+        const assignmentRows = parsedRows.flatMap((row) => {
+          const employeeId = employeeIdByCode.get(row.employee_code);
+          if (!employeeId) return [];
+          return row.assigned_site_ids.map((siteId) => ({
+            employee_id: employeeId,
+            site_id: siteId,
+            is_primary: siteId === row.assigned_site_id,
+          }));
+        });
+
+        if (assignmentRows.length > 0) {
+          const { error: insertAssignmentsError } = await supabase
+            .from('employee_site_assignments')
+            .upsert(assignmentRows, { onConflict: 'employee_id,site_id' });
+          if (insertAssignmentsError) throw insertAssignmentsError;
+        }
+      }
+
+      setMessage(`Imported ${parsedRows.length} employees.`);
       await load();
     } catch (err) {
       setError(await getFriendlyErrorMessage(err, 'Failed to import employees'));
@@ -229,7 +424,28 @@ export function EmployeesPage() {
             <Field label="Phone" value={form.phone} onChange={(event) => setForm({ ...form, phone: event.target.value })} />
             <Field label="Email" type="email" value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} />
             <Field label="Department" value={form.department} onChange={(event) => setForm({ ...form, department: event.target.value })} />
-            <SelectField label="Assigned site" value={form.assigned_site_id} options={siteOptions} onChange={(event) => setForm({ ...form, assigned_site_id: event.target.value })} />
+            <label className="field">
+              <span>Assigned sites (multiple)</span>
+              <div className="multi-checklist">
+                {sites.length === 0 && <span className="muted-note">No active sites available.</span>}
+                {sites.map((site) => (
+                  <label key={site.id} className="multi-checklist-row">
+                    <input
+                      type="checkbox"
+                      checked={form.assigned_site_ids.includes(site.id)}
+                      onChange={(event) => toggleFormSite(site.id, event.target.checked)}
+                    />
+                    <span>{site.name}</span>
+                  </label>
+                ))}
+              </div>
+            </label>
+            <SelectField
+              label="Primary site"
+              value={form.assigned_site_id}
+              options={selectedSiteOptions}
+              onChange={(event) => setForm((prev) => ({ ...prev, assigned_site_id: event.target.value }))}
+            />
             <ToggleField label="Active employee" checked={form.is_active} onChange={(value) => setForm({ ...form, is_active: value })} />
             {error && <div className="inline-error">{error}</div>}
             {message && <div className="inline-success">{message}</div>}
@@ -247,7 +463,16 @@ export function EmployeesPage() {
               { header: 'Code', cell: (row) => row.employee_code },
               { header: 'Name', cell: (row) => row.full_name },
               { header: 'Department', cell: (row) => row.department ?? '-' },
-              { header: 'Site', cell: (row) => sites.find((site) => site.id === row.assigned_site_id)?.name ?? '-' },
+              {
+                header: 'Sites',
+                cell: (row) => {
+                  const assignedSiteIds = employeeSiteMap[row.id] ?? (row.assigned_site_id ? [row.assigned_site_id] : []);
+                  if (assignedSiteIds.length === 0) return '-';
+                  return assignedSiteIds
+                    .map((siteId) => sites.find((site) => site.id === siteId)?.name ?? siteId)
+                    .join(', ');
+                },
+              },
               { header: 'Status', cell: (row) => <span className={`pill ${row.is_active ? 'active' : 'inactive'}`}>{row.is_active ? 'active' : 'inactive'}</span> },
               {
                 header: 'Actions',
