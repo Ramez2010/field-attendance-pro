@@ -1,6 +1,7 @@
 import { ChangeEvent, FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 
 import { DataTable } from '../components/DataTable';
+import { EmployeesUsersTabs } from '../components/EmployeesUsersTabs';
 import { Field, SelectField, ToggleField } from '../components/FormField';
 import { PageHeader } from '../components/PageHeader';
 import { ErrorState, LoadingState } from '../components/State';
@@ -415,6 +416,7 @@ export function EmployeesPage() {
           </div>
         }
       />
+      <EmployeesUsersTabs />
       <section className="split-grid">
         <div className="panel">
           <h2>{form.id ? 'Edit employee' : 'Add employee'}</h2>

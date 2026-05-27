@@ -8,7 +8,6 @@ import {
   MapPin,
   RadioTower,
   Settings,
-  ShieldCheck,
   Users,
 } from 'lucide-react';
 
@@ -19,10 +18,9 @@ import { ErrorState, LoadingState } from './State';
 const links = [
   { to: '/', label: 'Overview', icon: Gauge },
   { to: '/company', label: 'Company', icon: Building2 },
-  { to: '/employees', label: 'Employees', icon: Users },
+  { to: '/employees', label: 'Employees & Users', icon: Users, aliases: ['/users'] },
   { to: '/sites', label: 'Sites & Geofence', icon: MapPin, aliases: ['/geofence'] },
   { to: '/rules', label: 'Rules', icon: Settings },
-  { to: '/users', label: 'Users', icon: ShieldCheck },
   { to: '/monitoring', label: 'Monitoring', icon: RadioTower },
   { to: '/history', label: 'History', icon: History },
   { to: '/reports', label: 'Reports', icon: ClipboardList },
