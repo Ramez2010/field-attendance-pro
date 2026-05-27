@@ -1,7 +1,6 @@
 import { ChangeEvent, FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 
 import { DataTable } from '../components/DataTable';
-import { EmployeesUsersTabs } from '../components/EmployeesUsersTabs';
 import { Field, SelectField, ToggleField } from '../components/FormField';
 import { PageHeader } from '../components/PageHeader';
 import { ErrorState, LoadingState } from '../components/State';
@@ -214,7 +213,7 @@ export function EmployeesPage() {
 
     const existingLinkedUser = form.id ? usersByEmployeeId[form.id] : null;
     if (form.create_login_user && existingLinkedUser) {
-      setError('This employee already has a login user. Open the Users tab to edit it.');
+      setError('This employee already has a linked login user.');
       return;
     }
 
@@ -497,7 +496,6 @@ export function EmployeesPage() {
           </div>
         }
       />
-      <EmployeesUsersTabs />
       <section className="split-grid">
         <div className="panel">
           <h2>{form.id ? 'Edit employee' : 'Add employee'}</h2>
@@ -532,7 +530,7 @@ export function EmployeesPage() {
             <ToggleField label="Active employee" checked={form.is_active} onChange={(value) => setForm({ ...form, is_active: value })} />
             {form.id && usersByEmployeeId[form.id] && (
               <div className="inline-success">
-                Linked login user: {usersByEmployeeId[form.id].email}. Use the Users tab to edit password/role.
+                Linked login user: {usersByEmployeeId[form.id].email}.
               </div>
             )}
             {(!form.id || !usersByEmployeeId[form.id]) && (
