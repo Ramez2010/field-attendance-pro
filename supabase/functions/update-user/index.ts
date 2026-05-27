@@ -9,6 +9,7 @@ type UpdateUserPayload = {
   role?: AppRole;
   employee_id?: string | null;
   is_active?: boolean;
+  password?: string;
 };
 
 const allowedRoles: AppRole[] = ['super_admin', 'company_admin', 'employee'];
@@ -66,6 +67,13 @@ Deno.serve(async (req) => {
       return jsonResponse({ error: 'Invalid role' }, 400);
     }
 
+    const nextPassword = payload.password?.trim();
+    if (Object.prototype.hasOwnProperty.call(payload, 'password')) {
+      if (!nextPassword || nextPassword.length < 8) {
+        return jsonResponse({ error: 'password must be at least 8 characters' }, 400);
+      }
+    }
+
     const { data: target, error: targetError } = await adminClient
       .from('users')
       .select('id, role, company_id, employee_id')
@@ -111,19 +119,33 @@ Deno.serve(async (req) => {
     if (Object.prototype.hasOwnProperty.call(payload, 'employee_id')) patch.employee_id = nextEmployeeId;
     if (Object.prototype.hasOwnProperty.call(payload, 'is_active')) patch.is_active = payload.is_active;
 
-    if (Object.keys(patch).length === 0) {
+    if (Object.keys(patch).length === 0 && !nextPassword) {
       return jsonResponse({ error: 'No changes were provided' }, 400);
     }
 
-    const { data: profile, error: updateError } = await adminClient
-      .from('users')
-      .update(patch)
-      .eq('id', payload.user_id)
-      .select()
-      .single();
+    if (nextPassword) {
+      const { error: authUpdateError } = await adminClient.auth.admin.updateUserById(payload.user_id, {
+        password: nextPassword,
+      });
+      if (authUpdateError) {
+        return jsonResponse({ error: authUpdateError.message }, 400);
+      }
+    }
 
-    if (updateError) {
-      return jsonResponse({ error: updateError.message }, 400);
+    let profile = target;
+    if (Object.keys(patch).length > 0) {
+      const { data: updatedProfile, error: updateError } = await adminClient
+        .from('users')
+        .update(patch)
+        .eq('id', payload.user_id)
+        .select()
+        .single();
+
+      if (updateError) {
+        return jsonResponse({ error: updateError.message }, 400);
+      }
+
+      profile = updatedProfile;
     }
 
     await adminClient.rpc('write_audit', {

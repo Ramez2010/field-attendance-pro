@@ -93,6 +93,10 @@ export function UsersPage() {
   async function save(event: FormEvent) {
     event.preventDefault();
     if (!profile || !selectedCompanyId) return;
+    if (form.id && form.password && form.password.length < 8) {
+      setError('New password must be at least 8 characters.');
+      return;
+    }
     if (form.role === 'employee' && !form.employee_id) {
       setError('Select an employee profile when role is Employee.');
       return;
@@ -107,6 +111,7 @@ export function UsersPage() {
             role: form.role,
             employee_id: form.employee_id || null,
             is_active: form.is_active,
+            ...(form.password ? { password: form.password } : {}),
           }
         : {
             email: form.email,
@@ -119,7 +124,11 @@ export function UsersPage() {
 
       const { error: invokeError } = await supabase.functions.invoke(form.id ? 'update-user' : 'create-user', { body });
       if (invokeError) throw invokeError;
-      setMessage(form.id ? 'User updated.' : 'User created.');
+      setMessage(
+        form.id
+          ? form.password ? 'User updated and password changed.' : 'User updated.'
+          : 'User created.',
+      );
       setForm(emptyForm);
       await load();
     } catch (err) {
@@ -233,6 +242,7 @@ export function UsersPage() {
           <form onSubmit={save} className="form-stack">
             <Field label="Email" type="email" value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} disabled={Boolean(form.id)} required />
             {!form.id && <Field label="Temporary password" type="password" minLength={8} value={form.password} onChange={(event) => setForm({ ...form, password: event.target.value })} required />}
+            {form.id && <Field label="New password (optional)" type="password" minLength={8} value={form.password} onChange={(event) => setForm({ ...form, password: event.target.value })} placeholder="Leave blank to keep current password" />}
             <SelectField label="Role" value={form.role} options={roleOptions} onChange={(event) => setForm({ ...form, role: event.target.value as AppRole })} />
             <SelectField label="Employee profile" value={form.employee_id} options={employeeOptions} onChange={(event) => setForm({ ...form, employee_id: event.target.value })} />
             <ToggleField label="Active user" checked={form.is_active} onChange={(value) => setForm({ ...form, is_active: value })} />
