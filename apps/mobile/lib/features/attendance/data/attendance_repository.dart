@@ -104,16 +104,6 @@ class AttendanceRepository {
           allowedSites.add(site);
         }
       }
-    } else {
-      final siteData = await _client
-          .from('sites')
-          .select()
-          .eq('company_id', profile.companyId)
-          .eq('is_active', true)
-          .order('created_at');
-      for (final rawRow in siteData) {
-        allowedSites.add(Site.fromJson(Map<String, dynamic>.from(rawRow as Map)));
-      }
     }
 
     Site? site;
