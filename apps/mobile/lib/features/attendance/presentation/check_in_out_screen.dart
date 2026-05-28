@@ -78,11 +78,17 @@ class _CheckInOutScreenState extends ConsumerState<CheckInOutScreen> {
         ? AttendanceCheckType.checkOut
         : AttendanceCheckType.checkIn;
     final notes = _notesController.text.trim();
-    final selectedSite = _findSiteById(contextData.allowedSites, selectedSiteId);
+    final lockedCheckOutSiteId =
+        contextData.isCheckedIn ? contextData.latestRecord?.siteId : null;
+    final effectiveSiteId =
+        contextData.isCheckedIn ? lockedCheckOutSiteId : selectedSiteId;
+    final selectedSite = _findSiteById(contextData.allowedSites, effectiveSiteId);
 
     if (contextData.allowedSites.isNotEmpty && selectedSite == null) {
       setState(() {
-        _error = 'Select a site before recording attendance.';
+        _error = contextData.isCheckedIn
+            ? 'Check-out site is locked to your current check-in site. Refresh and try again.'
+            : 'Select a site before recording attendance.';
         _success = null;
       });
       return;
@@ -146,7 +152,7 @@ class _CheckInOutScreenState extends ConsumerState<CheckInOutScreen> {
           .read(attendanceRepositoryProvider)
           .recordAttendance(
             checkType: checkType,
-            siteId: selectedSite?.id,
+            siteId: effectiveSiteId,
             latitude: position.latitude,
             longitude: position.longitude,
             gpsAccuracy: position.accuracy,
@@ -189,14 +195,26 @@ class _CheckInOutScreenState extends ConsumerState<CheckInOutScreen> {
           }
 
           final data = snapshot.requireData;
+          final isCheckOut = data.isCheckedIn;
+          final lockedCheckOutSiteId =
+              isCheckOut ? data.latestRecord?.siteId : null;
           final hasSelectedSite = _findSiteById(
             data.allowedSites,
             _selectedSiteId,
           );
           final selectedSiteId =
-              hasSelectedSite?.id ??
-              data.site?.id ??
-              (data.allowedSites.isNotEmpty ? data.allowedSites.first.id : null);
+              isCheckOut
+              ? (lockedCheckOutSiteId ??
+                    data.site?.id ??
+                    (data.allowedSites.isNotEmpty
+                        ? data.allowedSites.first.id
+                        : null))
+              : (hasSelectedSite?.id ??
+                    data.site?.id ??
+                    (data.allowedSites.isNotEmpty
+                        ? data.allowedSites.first.id
+                        : null));
+          final selectedSite = _findSiteById(data.allowedSites, selectedSiteId);
 
           return RefreshIndicator(
             onRefresh: _refresh,
@@ -205,29 +223,39 @@ class _CheckInOutScreenState extends ConsumerState<CheckInOutScreen> {
               children: [
                 _StatusPanel(
                   data: data,
-                  selectedSite: _findSiteById(data.allowedSites, selectedSiteId),
+                  selectedSite: selectedSite,
                 ),
                 const SizedBox(height: 18),
-                DropdownButtonFormField<String>(
-                  key: ValueKey(selectedSiteId ?? 'no-site'),
-                  initialValue: selectedSiteId,
-                  items: data.allowedSites
-                      .map(
-                        (site) => DropdownMenuItem<String>(
-                          value: site.id,
-                          child: Text(site.name),
-                        ),
-                      )
-                      .toList(),
-                  onChanged: _isSubmitting
-                      ? null
-                      : (value) => setState(() {
-                          _selectedSiteId = value;
-                        }),
-                  decoration: const InputDecoration(
-                    labelText: 'Attendance site',
+                if (isCheckOut)
+                  InputDecorator(
+                    decoration: const InputDecoration(
+                      labelText: 'Attendance site',
+                    ),
+                    child: Text(
+                      selectedSite?.name ?? 'Locked to active check-in site',
+                    ),
+                  )
+                else
+                  DropdownButtonFormField<String>(
+                    key: ValueKey(selectedSiteId ?? 'no-site'),
+                    initialValue: selectedSiteId,
+                    items: data.allowedSites
+                        .map(
+                          (site) => DropdownMenuItem<String>(
+                            value: site.id,
+                            child: Text(site.name),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: _isSubmitting
+                        ? null
+                        : (value) => setState(() {
+                            _selectedSiteId = value;
+                          }),
+                    decoration: const InputDecoration(
+                      labelText: 'Attendance site',
+                    ),
                   ),
-                ),
                 if (data.allowedSites.isEmpty) ...[
                   const SizedBox(height: 8),
                   const Text(

@@ -46,6 +46,17 @@ function mapUrl(latitude: number | null, longitude: number | null) {
   return `https://www.google.com/maps?q=${latitude},${longitude}`;
 }
 
+function sessionSiteLabel(row: MonitoringRow) {
+  const checkInSite = row.check_in_site_name;
+  const checkOutSite = row.check_out_site_name;
+  if (checkInSite && checkOutSite) {
+    return checkInSite === checkOutSite
+      ? checkInSite
+      : `${checkInSite} -> ${checkOutSite}`;
+  }
+  return checkInSite ?? checkOutSite ?? '-';
+}
+
 function buildMonitoringRows(records: AttendanceRecordDetailed[]) {
   const sorted = [...records].sort((a, b) => {
     const left = new Date(a.attendance_time).getTime();
@@ -281,6 +292,7 @@ export function MonitoringPage() {
 
   const exportRows = rows.map((row) => ({
     employee: row.employee_name,
+    site: sessionSiteLabel(row),
     check_in_date_time: row.check_in_time ? formatDateTime(row.check_in_time) : '',
     check_in_site: row.check_in_site_name ?? '',
     check_in_google_map: mapUrl(row.check_in_latitude, row.check_in_longitude) ?? '',
@@ -366,6 +378,7 @@ export function MonitoringPage() {
           rows={rows}
           columns={[
             { header: 'Employee', cell: (row) => row.employee_name },
+            { header: 'Site', cell: (row) => sessionSiteLabel(row) },
             {
               header: 'Check in date/time',
               cell: (row) =>
