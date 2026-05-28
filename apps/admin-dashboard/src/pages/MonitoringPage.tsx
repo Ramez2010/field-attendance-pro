@@ -57,28 +57,23 @@ function sessionSiteLabel(row: MonitoringRow) {
   return checkInSite ?? checkOutSite ?? '-';
 }
 
-function formatDurationFromMinutes(totalMinutes: number) {
-  const hours = Math.floor(totalMinutes / 60);
-  const minutes = totalMinutes % 60;
-  if (hours <= 0) return `${minutes}m`;
-  if (minutes <= 0) return `${hours}h`;
-  return `${hours}h ${minutes}m`;
-}
-
-function workDurationLabel(row: MonitoringRow) {
-  if (!row.check_in_time) return '-';
+function workDurationMinutes(row: MonitoringRow): number | null {
+  if (!row.check_in_time) return null;
 
   const checkIn = new Date(row.check_in_time).getTime();
-  if (Number.isNaN(checkIn)) return '-';
+  if (Number.isNaN(checkIn)) return null;
 
   const checkOut = row.check_out_time
     ? new Date(row.check_out_time).getTime()
     : Date.now();
-  if (Number.isNaN(checkOut) || checkOut < checkIn) return '-';
+  if (Number.isNaN(checkOut) || checkOut < checkIn) return null;
 
-  const minutes = Math.floor((checkOut - checkIn) / 60000);
-  const formatted = formatDurationFromMinutes(minutes);
-  return row.check_out_time ? formatted : `${formatted} (running)`;
+  return Math.floor((checkOut - checkIn) / 60000);
+}
+
+function workDurationLabel(row: MonitoringRow) {
+  const minutes = workDurationMinutes(row);
+  return minutes == null ? '-' : String(minutes);
 }
 
 function buildMonitoringRows(records: AttendanceRecordDetailed[]) {
@@ -314,17 +309,20 @@ export function MonitoringPage() {
     (row) => row.check_in_time != null && row.check_out_time == null,
   ).length;
 
-  const exportRows = rows.map((row) => ({
-    employee: row.employee_name,
-    site: sessionSiteLabel(row),
-    check_in_date_time: row.check_in_time ? formatDateTime(row.check_in_time) : '',
-    check_in_site: row.check_in_site_name ?? '',
-    check_in_google_map: mapUrl(row.check_in_latitude, row.check_in_longitude) ?? '',
-    check_out_date_time: row.check_out_time ? formatDateTime(row.check_out_time) : '',
-    check_out_site: row.check_out_site_name ?? '',
-    check_out_google_map: mapUrl(row.check_out_latitude, row.check_out_longitude) ?? '',
-    work_duration: workDurationLabel(row),
-  }));
+  const exportRows = rows.map((row) => {
+    const durationMinutes = workDurationMinutes(row);
+    return {
+      employee: row.employee_name,
+      site: sessionSiteLabel(row),
+      check_in_date_time: row.check_in_time ? formatDateTime(row.check_in_time) : '',
+      check_in_site: row.check_in_site_name ?? '',
+      check_in_google_map: mapUrl(row.check_in_latitude, row.check_in_longitude) ?? '',
+      check_out_date_time: row.check_out_time ? formatDateTime(row.check_out_time) : '',
+      check_out_site: row.check_out_site_name ?? '',
+      check_out_google_map: mapUrl(row.check_out_latitude, row.check_out_longitude) ?? '',
+      work_duration_minutes: durationMinutes ?? '',
+    };
+  });
 
   if (loading) return <LoadingState />;
   if (error && rows.length === 0) return <ErrorState message={error} />;
@@ -446,7 +444,10 @@ export function MonitoringPage() {
                 );
               },
             },
-            { header: 'Work duration', cell: (row) => workDurationLabel(row) },
+            {
+              header: 'Work duration (minutes)',
+              cell: (row) => workDurationLabel(row),
+            },
           ]}
           empty="No attendance sessions found for this filter."
         />
