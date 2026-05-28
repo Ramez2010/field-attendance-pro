@@ -40,6 +40,7 @@ export function SitesPage() {
   const [form, setForm] = useState<SiteForm>(emptyForm);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [deletingSiteId, setDeletingSiteId] = useState<string | null>(null);
   const [importing, setImporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -140,14 +141,52 @@ export function SitesPage() {
   }
 
   async function deleteSite(site: Site) {
-    if (!confirm(`Delete ${site.name}? Use deactivate if attendance records already reference this site.`)) return;
+    if (!selectedCompanyId) return;
+    if (!confirm(`Delete ${site.name}? If attendance history references this site, it will be archived (deactivated) instead.`)) return;
+    setDeletingSiteId(site.id);
     setError(null);
+    setMessage(null);
     try {
-      const { error: deleteError } = await supabase.from('sites').delete().eq('id', site.id);
-      if (deleteError) throw deleteError;
+      const { error: deleteError } = await supabase
+        .from('sites')
+        .delete()
+        .eq('id', site.id);
+
+      if (deleteError) {
+        const code = (deleteError as { code?: string }).code;
+        if (code !== '23503') throw deleteError;
+
+        // Site is linked to historical attendance records.
+        // Archive instead of hard delete and detach active employee links.
+        const { error: unassignEmployeeError } = await supabase
+          .from('employees')
+          .update({ assigned_site_id: null })
+          .eq('company_id', selectedCompanyId)
+          .eq('assigned_site_id', site.id);
+        if (unassignEmployeeError) throw unassignEmployeeError;
+
+        const { error: removeAssignmentError } = await supabase
+          .from('employee_site_assignments')
+          .delete()
+          .eq('site_id', site.id);
+        if (removeAssignmentError) throw removeAssignmentError;
+
+        const { error: archiveError } = await supabase
+          .from('sites')
+          .update({ is_active: false })
+          .eq('id', site.id);
+        if (archiveError) throw archiveError;
+
+        setMessage(`"${site.name}" has attendance history, so it was archived (deactivated) instead of deleted.`);
+      } else {
+        setMessage(`"${site.name}" deleted.`);
+      }
+
       await load();
     } catch (err) {
       setError(await getFriendlyErrorMessage(err, 'Failed to delete site'));
+    } finally {
+      setDeletingSiteId(null);
     }
   }
 
@@ -278,7 +317,13 @@ export function SitesPage() {
                 cell: (row) => (
                   <div className="table-actions">
                     <button className="link-button" onClick={() => edit(row)}>Edit</button>
-                    <button className="link-button danger-text" onClick={() => deleteSite(row)}>Delete</button>
+                    <button
+                      className="link-button danger-text"
+                      onClick={() => deleteSite(row)}
+                      disabled={deletingSiteId === row.id}
+                    >
+                      {deletingSiteId === row.id ? 'Deleting...' : 'Delete'}
+                    </button>
                   </div>
                 ),
               },
