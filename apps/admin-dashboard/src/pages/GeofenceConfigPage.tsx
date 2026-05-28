@@ -14,13 +14,11 @@ import { AttendanceSettings, Site } from '../lib/types';
 type GeofenceSettingsForm = {
   require_geofence: boolean;
   minimum_gps_accuracy: number;
-  allow_check_in_outside_geofence: boolean;
 };
 
 const defaults: GeofenceSettingsForm = {
   require_geofence: false,
   minimum_gps_accuracy: 50,
-  allow_check_in_outside_geofence: false,
 };
 
 export function GeofenceConfigPage() {
@@ -69,7 +67,6 @@ export function GeofenceConfigPage() {
         setSettings({
           require_geofence: row.require_geofence,
           minimum_gps_accuracy: Number(row.minimum_gps_accuracy),
-          allow_check_in_outside_geofence: row.allow_check_in_outside_geofence,
         });
       } else {
         setSettingsId(null);
@@ -112,7 +109,7 @@ export function GeofenceConfigPage() {
         company_id: selectedCompanyId,
         require_geofence: settings.require_geofence,
         minimum_gps_accuracy: Number(settings.minimum_gps_accuracy),
-        allow_check_in_outside_geofence: settings.allow_check_in_outside_geofence,
+        allow_check_in_outside_geofence: false,
         allow_multiple_checkins_per_day: true,
       };
       const upsertPayload = settingsId ? { id: settingsId, ...payload } : payload;
@@ -153,7 +150,7 @@ export function GeofenceConfigPage() {
           .update({
             require_geofence: defaults.require_geofence,
             minimum_gps_accuracy: defaults.minimum_gps_accuracy,
-            allow_check_in_outside_geofence: defaults.allow_check_in_outside_geofence,
+            allow_check_in_outside_geofence: false,
             allow_multiple_checkins_per_day: true,
             require_notes: false,
           })
@@ -263,11 +260,6 @@ export function GeofenceConfigPage() {
               value={settings.minimum_gps_accuracy}
               onChange={(event) => setSettings({ ...settings, minimum_gps_accuracy: Number(event.target.value) })}
             />
-            <ToggleField
-              label="Allow attendance outside geofence"
-              checked={settings.allow_check_in_outside_geofence}
-              onChange={(value) => setSettings({ ...settings, allow_check_in_outside_geofence: value })}
-            />
             <div className="button-row">
               <button className="primary-button" disabled={savingSettings || deletingSettings}>
                 {savingSettings ? 'Saving...' : 'Save geofence policy'}
@@ -282,7 +274,7 @@ export function GeofenceConfigPage() {
           <h2>Geofence summary</h2>
           <p><strong>Sites:</strong> {sites.length}</p>
           <p><strong>Average radius:</strong> {averageRadius}m</p>
-          <p><strong>Outside attempts:</strong> {settings.allow_check_in_outside_geofence ? 'Allowed' : 'Blocked'}</p>
+          <p><strong>Outside attempts:</strong> Blocked</p>
           <p><strong>Required GPS accuracy:</strong> &lt;= {settings.minimum_gps_accuracy}m</p>
         </div>
       </section>

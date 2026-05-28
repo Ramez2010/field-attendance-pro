@@ -12,7 +12,6 @@ import { AttendanceSettings } from '../lib/types';
 const defaults = {
   require_geofence: false,
   minimum_gps_accuracy: 50,
-  allow_check_in_outside_geofence: false,
   require_notes: false,
 };
 
@@ -43,7 +42,6 @@ export function AttendanceRulesPage() {
         setSettings({
           require_geofence: row.require_geofence,
           minimum_gps_accuracy: Number(row.minimum_gps_accuracy),
-          allow_check_in_outside_geofence: row.allow_check_in_outside_geofence,
           require_notes: row.require_notes,
         });
       } else {
@@ -76,6 +74,7 @@ export function AttendanceRulesPage() {
         ...settings,
         company_id: selectedCompanyId,
         minimum_gps_accuracy: Number(settings.minimum_gps_accuracy),
+        allow_check_in_outside_geofence: false,
         allow_multiple_checkins_per_day: true,
       };
       const upsertPayload = settingsId ? { id: settingsId, ...payload } : payload;
@@ -109,7 +108,6 @@ export function AttendanceRulesPage() {
             value={settings.minimum_gps_accuracy}
             onChange={(event) => setSettings({ ...settings, minimum_gps_accuracy: Number(event.target.value) })}
           />
-          <ToggleField label="Allow attendance outside geofence" checked={settings.allow_check_in_outside_geofence} onChange={(value) => setSettings({ ...settings, allow_check_in_outside_geofence: value })} />
           <ToggleField label="Require notes" checked={settings.require_notes} onChange={(value) => setSettings({ ...settings, require_notes: value })} />
           {error && <div className="inline-error">{error}</div>}
           {message && <div className="inline-success">{message}</div>}
