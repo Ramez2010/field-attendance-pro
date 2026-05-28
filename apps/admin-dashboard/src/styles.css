@@ -23,6 +23,9 @@ button:disabled { cursor: not-allowed; opacity: 0.65; }
 
 .shell { min-height: 100vh; display: grid; grid-template-columns: 290px minmax(0, 1fr); }
 .sidebar { position: sticky; top: 0; height: 100vh; padding: 22px; display: flex; flex-direction: column; gap: 24px; background: rgba(255,255,255,0.82); backdrop-filter: blur(18px); border-right: 1px solid var(--line); }
+[dir='rtl'] .shell { direction: rtl; }
+[dir='rtl'] .sidebar { border-right: 0; border-left: 1px solid var(--line); }
+[dir='rtl'] th, [dir='rtl'] td { text-align: right; }
 .brand { display: flex; align-items: center; gap: 12px; }
 .brand.large { margin-bottom: 22px; }
 .brand-mark { width: 46px; height: 46px; display: grid; place-items: center; border-radius: 16px; background: linear-gradient(135deg, var(--forest), var(--forest-2)); color: white; font-weight: 900; letter-spacing: -0.04em; }

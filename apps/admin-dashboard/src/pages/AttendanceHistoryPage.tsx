@@ -7,6 +7,7 @@ import { StatCard } from '../components/StatCard';
 import { ErrorState, LoadingState } from '../components/State';
 import { useAuth } from '../context/AuthContext';
 import { useCompanyScope } from '../context/CompanyScopeContext';
+import { useLanguage } from '../context/LanguageContext';
 import { formatDateTime } from '../lib/date';
 import { getFriendlyErrorMessage } from '../lib/errors';
 import { exportExcel } from '../lib/export';
@@ -30,6 +31,7 @@ function endOfDateIso(value: string) {
 export function AttendanceHistoryPage() {
   const { profile } = useAuth();
   const { selectedCompanyId, selectedCompany } = useCompanyScope();
+  const { t } = useLanguage();
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [sites, setSites] = useState<Site[]>([]);
   const [records, setRecords] = useState<AttendanceRecordDetailed[]>([]);
@@ -192,22 +194,22 @@ export function AttendanceHistoryPage() {
   return (
     <>
       <PageHeader
-        title="Attendance History"
+        title={t('historyPage.title')}
         eyebrow={selectedCompany ? `${selectedCompany.name} time records` : 'Filtered attendance timeline'}
         actions={
           <div className="button-row">
             <button className="secondary-button" onClick={exportHistory} disabled={historyRows.length === 0}>
-              Export Excel
+              {t('common.exportExcel')}
             </button>
           </div>
         }
       />
       <section className="panel">
         <form className="filters-grid" onSubmit={runReport}>
-          <SelectField label="Employee" value={employeeId} onChange={(event) => setEmployeeId(event.target.value)} options={employeeOptions} />
-          <SelectField label="Site" value={siteId} onChange={(event) => setSiteId(event.target.value)} options={siteOptions} />
+          <SelectField label={t('common.employee')} value={employeeId} onChange={(event) => setEmployeeId(event.target.value)} options={employeeOptions} />
+          <SelectField label={t('common.site')} value={siteId} onChange={(event) => setSiteId(event.target.value)} options={siteOptions} />
           <SelectField
-            label="Type"
+            label={t('common.type')}
             value={checkType}
             onChange={(event) => setCheckType(event.target.value as AttendanceCheckType | '')}
             options={[
@@ -224,9 +226,9 @@ export function AttendanceHistoryPage() {
               { label: 'Outside geofence', value: 'outside' },
             ]}
           />
-          <Field label="Date from" type="date" value={dateFrom} onChange={(event) => setDateFrom(event.target.value)} />
-          <Field label="Date to" type="date" value={dateTo} onChange={(event) => setDateTo(event.target.value)} />
-          <button className="primary-button" disabled={reportLoading}>{reportLoading ? 'Loading...' : 'Apply filters'}</button>
+          <Field label={t('common.dateFrom')} type="date" value={dateFrom} onChange={(event) => setDateFrom(event.target.value)} />
+          <Field label={t('common.dateTo')} type="date" value={dateTo} onChange={(event) => setDateTo(event.target.value)} />
+          <button className="primary-button" disabled={reportLoading}>{reportLoading ? t('common.loading') : t('common.applyFilters')}</button>
         </form>
         {error && <div className="inline-error">{error}</div>}
         {message && <div className="inline-success">{message}</div>}

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/localization/app_language_controller.dart';
+import '../../../core/localization/app_translations.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../shared/widgets/async_state_view.dart';
 import '../../../shared/widgets/info_card.dart';
@@ -45,8 +47,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final locale = ref.watch(appLocaleProvider);
+
     return ScreenScaffold(
-      title: 'Profile',
+      title: context.tr('profile.title'),
       child: FutureBuilder<AttendanceContext>(
         future: _future,
         builder: (context, snapshot) {
@@ -103,24 +107,47 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                   ),
                 ),
                 InfoCard(
-                  title: 'Email',
+                  title: context.tr('profile.email'),
                   value: data.employee.email ?? data.profile.email,
                   icon: Icons.mail_outline_rounded,
                 ),
                 InfoCard(
-                  title: 'Phone',
-                  value: data.employee.phone ?? 'Not set',
+                  title: context.tr('profile.phone'),
+                  value: data.employee.phone ?? context.tr('common.notSet'),
                   icon: Icons.phone_outlined,
                 ),
                 InfoCard(
-                  title: 'Department',
-                  value: data.employee.department ?? 'Not set',
+                  title: context.tr('profile.department'),
+                  value:
+                      data.employee.department ?? context.tr('common.notSet'),
                   icon: Icons.badge_outlined,
                 ),
                 InfoCard(
-                  title: 'Assigned site',
-                  value: data.site?.name ?? 'Not assigned',
+                  title: context.tr('profile.assignedSite'),
+                  value: data.site?.name ?? context.tr('common.notAssigned'),
                   icon: Icons.place_outlined,
+                ),
+                Card(
+                  child: ListTile(
+                    title: Text(context.tr('profile.language')),
+                    trailing: DropdownButton<Locale>(
+                      value: locale,
+                      onChanged: (value) {
+                        if (value == null) return;
+                        ref.read(appLocaleProvider.notifier).setLocale(value);
+                      },
+                      items: [
+                        DropdownMenuItem(
+                          value: const Locale('en'),
+                          child: Text(context.tr('profile.languageEnglish')),
+                        ),
+                        DropdownMenuItem(
+                          value: const Locale('ar'),
+                          child: Text(context.tr('profile.languageArabic')),
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
                 const SizedBox(height: 18),
                 OutlinedButton.icon(
@@ -132,7 +159,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                           child: CircularProgressIndicator(strokeWidth: 2),
                         )
                       : const Icon(Icons.logout_rounded),
-                  label: const Text('Sign out'),
+                  label: Text(context.tr('profile.signOut')),
                 ),
               ],
             ),

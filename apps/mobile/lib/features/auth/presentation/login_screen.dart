@@ -1,7 +1,9 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/config/app_config.dart';
+import '../../../core/localization/app_language_controller.dart';
+import '../../../core/localization/app_translations.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../shared/widgets/primary_button.dart';
 import '../data/auth_repository.dart';
@@ -44,7 +46,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     });
 
     try {
-      await ref.read(authRepositoryProvider).signIn(
+      await ref
+          .read(authRepositoryProvider)
+          .signIn(
             email: _emailController.text,
             password: _passwordController.text,
           );
@@ -57,6 +61,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final locale = ref.watch(appLocaleProvider);
+
     return Scaffold(
       body: SafeArea(
         child: Center(
@@ -69,41 +75,83 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        DropdownButton<Locale>(
+                          value: locale,
+                          onChanged: (value) {
+                            if (value == null) return;
+                            ref
+                                .read(appLocaleProvider.notifier)
+                                .setLocale(value);
+                          },
+                          items: [
+                            DropdownMenuItem(
+                              value: const Locale('en'),
+                              child: Text(
+                                context.tr('profile.languageEnglish'),
+                              ),
+                            ),
+                            DropdownMenuItem(
+                              value: const Locale('ar'),
+                              child: Text(context.tr('profile.languageArabic')),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
                     Container(
                       padding: const EdgeInsets.all(22),
                       decoration: BoxDecoration(
                         color: AppTheme.mint,
                         borderRadius: BorderRadius.circular(28),
                       ),
-                      child: const Icon(Icons.pin_drop_rounded, size: 54, color: AppTheme.forest),
+                      child: const Icon(
+                        Icons.pin_drop_rounded,
+                        size: 54,
+                        color: AppTheme.forest,
+                      ),
                     ),
                     const SizedBox(height: 28),
                     Text(
                       AppConfig.appName,
-                      style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                      style: Theme.of(context).textTheme.headlineMedium
+                          ?.copyWith(
                             fontWeight: FontWeight.w900,
                             color: AppTheme.ink,
                           ),
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      'Secure field attendance with live GPS validation.',
-                      style: Theme.of(context).textTheme.bodyLarge?.copyWith(color: Colors.black54),
+                      context.tr('login.subtitle'),
+                      style: Theme.of(
+                        context,
+                      ).textTheme.bodyLarge?.copyWith(color: Colors.black54),
                     ),
                     const SizedBox(height: 28),
                     TextFormField(
                       controller: _emailController,
                       keyboardType: TextInputType.emailAddress,
                       textInputAction: TextInputAction.next,
-                      decoration: const InputDecoration(labelText: 'Email'),
-                      validator: (value) => value == null || !value.contains('@') ? 'Enter a valid email' : null,
+                      decoration: InputDecoration(
+                        labelText: context.tr('login.email'),
+                      ),
+                      validator: (value) =>
+                          value == null || !value.contains('@')
+                          ? context.tr('login.validEmail')
+                          : null,
                     ),
                     const SizedBox(height: 14),
                     TextFormField(
                       controller: _passwordController,
                       obscureText: true,
-                      decoration: const InputDecoration(labelText: 'Password'),
-                      validator: (value) => value == null || value.length < 8 ? 'Password must be at least 8 characters' : null,
+                      decoration: InputDecoration(
+                        labelText: context.tr('login.password'),
+                      ),
+                      validator: (value) => value == null || value.length < 8
+                          ? context.tr('login.passwordMin')
+                          : null,
                       onFieldSubmitted: (_) => _submit(),
                     ),
                     if (_error != null) ...[
@@ -112,7 +160,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     ],
                     const SizedBox(height: 24),
                     PrimaryButton(
-                      label: 'Sign in',
+                      label: context.tr('login.signIn'),
                       isLoading: _isLoading,
                       onPressed: _submit,
                     ),

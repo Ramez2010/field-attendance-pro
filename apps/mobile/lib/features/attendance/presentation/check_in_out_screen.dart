@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/errors/app_exception.dart';
+import '../../../core/localization/app_translations.dart';
 import '../../../core/services/device_info_service.dart';
 import '../../../core/services/location_service.dart';
 import '../../../core/theme/app_theme.dart';
@@ -73,22 +74,39 @@ class _CheckInOutScreenState extends ConsumerState<CheckInOutScreen> {
     return raw;
   }
 
-  Future<void> _submit(AttendanceContext contextData, String? selectedSiteId) async {
+  Future<void> _submit(
+    AttendanceContext contextData,
+    String? selectedSiteId,
+  ) async {
+    final checkInLabelText = context.tr('attendance.checkIn');
+    final checkOutLabelText = context.tr('attendance.checkOut');
+    final savedAtLabel = context.tr('attendance.savedAt');
+    final checkoutSiteLockedErrorText = context.tr(
+      'attendance.checkoutSiteLockedError',
+    );
+    final selectSiteErrorText = context.tr('attendance.selectSiteError');
+    final notesRequiredErrorText = context.tr('attendance.notesRequiredError');
+
     final checkType = contextData.isCheckedIn
         ? AttendanceCheckType.checkOut
         : AttendanceCheckType.checkIn;
     final notes = _notesController.text.trim();
-    final lockedCheckOutSiteId =
-        contextData.isCheckedIn ? contextData.latestRecord?.siteId : null;
-    final effectiveSiteId =
-        contextData.isCheckedIn ? lockedCheckOutSiteId : selectedSiteId;
-    final selectedSite = _findSiteById(contextData.allowedSites, effectiveSiteId);
+    final lockedCheckOutSiteId = contextData.isCheckedIn
+        ? contextData.latestRecord?.siteId
+        : null;
+    final effectiveSiteId = contextData.isCheckedIn
+        ? lockedCheckOutSiteId
+        : selectedSiteId;
+    final selectedSite = _findSiteById(
+      contextData.allowedSites,
+      effectiveSiteId,
+    );
 
     if (contextData.allowedSites.isNotEmpty && selectedSite == null) {
       setState(() {
         _error = contextData.isCheckedIn
-            ? 'Check-out site is locked to your current check-in site. Refresh and try again.'
-            : 'Select a site before recording attendance.';
+            ? checkoutSiteLockedErrorText
+            : selectSiteErrorText;
         _success = null;
       });
       return;
@@ -96,7 +114,7 @@ class _CheckInOutScreenState extends ConsumerState<CheckInOutScreen> {
 
     if (contextData.settings.requireNotes && notes.isEmpty) {
       setState(() {
-        _error = 'Notes are required by your company attendance rules.';
+        _error = notesRequiredErrorText;
         _success = null;
       });
       return;
@@ -162,21 +180,32 @@ class _CheckInOutScreenState extends ConsumerState<CheckInOutScreen> {
           );
 
       _notesController.clear();
-      setState(
-        () => _success = '${record.label} saved at ${record.formattedTime}.',
-      );
+      final actionLabel = record.checkType == AttendanceCheckType.checkIn
+          ? checkInLabelText
+          : checkOutLabelText;
+      setState(() {
+        _success = '$actionLabel $savedAtLabel ${record.formattedTime}.';
+      });
       await _refresh();
     } catch (error) {
-      setState(() => _error = _friendlyError(error));
+      if (mounted) {
+        setState(() {
+          _error = _friendlyError(error);
+        });
+      }
     } finally {
-      if (mounted) setState(() => _isSubmitting = false);
+      if (mounted) {
+        setState(() {
+          _isSubmitting = false;
+        });
+      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return ScreenScaffold(
-      title: 'Attendance',
+      title: context.tr('attendance.title'),
       action: IconButton(
         onPressed: _refresh,
         icon: const Icon(Icons.refresh_rounded),
@@ -196,14 +225,14 @@ class _CheckInOutScreenState extends ConsumerState<CheckInOutScreen> {
 
           final data = snapshot.requireData;
           final isCheckOut = data.isCheckedIn;
-          final lockedCheckOutSiteId =
-              isCheckOut ? data.latestRecord?.siteId : null;
+          final lockedCheckOutSiteId = isCheckOut
+              ? data.latestRecord?.siteId
+              : null;
           final hasSelectedSite = _findSiteById(
             data.allowedSites,
             _selectedSiteId,
           );
-          final selectedSiteId =
-              isCheckOut
+          final selectedSiteId = isCheckOut
               ? (lockedCheckOutSiteId ??
                     data.site?.id ??
                     (data.allowedSites.isNotEmpty
@@ -221,18 +250,15 @@ class _CheckInOutScreenState extends ConsumerState<CheckInOutScreen> {
             child: ListView(
               padding: const EdgeInsets.all(18),
               children: [
-                _StatusPanel(
-                  data: data,
-                  selectedSite: selectedSite,
-                ),
+                _StatusPanel(data: data, selectedSite: selectedSite),
                 const SizedBox(height: 18),
                 if (isCheckOut)
                   InputDecorator(
-                    decoration: const InputDecoration(
-                      labelText: 'Attendance site',
+                    decoration: InputDecoration(
+                      labelText: context.tr('attendance.site'),
                     ),
                     child: Text(
-                      selectedSite?.name ?? 'Locked to active check-in site',
+                      selectedSite?.name ?? context.tr('attendance.siteLocked'),
                     ),
                   )
                 else
@@ -252,15 +278,15 @@ class _CheckInOutScreenState extends ConsumerState<CheckInOutScreen> {
                         : (value) => setState(() {
                             _selectedSiteId = value;
                           }),
-                    decoration: const InputDecoration(
-                      labelText: 'Attendance site',
+                    decoration: InputDecoration(
+                      labelText: context.tr('attendance.site'),
                     ),
                   ),
                 if (data.allowedSites.isEmpty) ...[
                   const SizedBox(height: 8),
-                  const Text(
-                    'No active site is available for attendance. Contact your admin.',
-                    style: TextStyle(color: AppTheme.danger),
+                  Text(
+                    context.tr('attendance.noSiteMessage'),
+                    style: const TextStyle(color: AppTheme.danger),
                   ),
                 ],
                 const SizedBox(height: 18),
@@ -270,8 +296,8 @@ class _CheckInOutScreenState extends ConsumerState<CheckInOutScreen> {
                   maxLines: 4,
                   decoration: InputDecoration(
                     labelText: data.settings.requireNotes
-                        ? 'Notes required'
-                        : 'Notes optional',
+                        ? context.tr('attendance.notesRequired')
+                        : context.tr('attendance.notesOptional'),
                     alignLabelWithHint: true,
                   ),
                 ),
@@ -284,7 +310,9 @@ class _CheckInOutScreenState extends ConsumerState<CheckInOutScreen> {
                 SizedBox(
                   height: 92,
                   child: PrimaryButton(
-                    label: data.isCheckedIn ? 'Check out' : 'Check in',
+                    label: data.isCheckedIn
+                        ? context.tr('attendance.checkOut')
+                        : context.tr('attendance.checkIn'),
                     icon: data.isCheckedIn
                         ? Icons.logout_rounded
                         : Icons.login_rounded,
@@ -297,7 +325,7 @@ class _CheckInOutScreenState extends ConsumerState<CheckInOutScreen> {
                 ),
                 const SizedBox(height: 14),
                 Text(
-                  'The app validates GPS permission, accuracy, device session, and attendance sequence before saving. Geofence checks are applied only when enabled.',
+                  context.tr('attendance.hint'),
                   style: Theme.of(
                     context,
                   ).textTheme.bodySmall?.copyWith(color: Colors.black54),
@@ -346,13 +374,16 @@ class _StatusPanel extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        data.isCheckedIn ? 'Checked in' : 'Ready to check in',
+                        data.isCheckedIn
+                            ? context.tr('attendance.checkedIn')
+                            : context.tr('attendance.ready'),
                         style: Theme.of(context).textTheme.titleLarge?.copyWith(
                           fontWeight: FontWeight.w900,
                         ),
                       ),
                       Text(
-                        selectedSite?.name ?? 'No selected site',
+                        selectedSite?.name ??
+                            context.tr('attendance.noSelectedSite'),
                         style: const TextStyle(color: Colors.black54),
                       ),
                     ],
@@ -362,23 +393,23 @@ class _StatusPanel extends StatelessWidget {
             ),
             const SizedBox(height: 18),
             _RuleLine(
-              label: 'Allowed radius',
+              label: context.tr('attendance.allowedRadius'),
               value: selectedSite == null
                   ? '-'
                   : '${selectedSite!.allowedRadiusMeters.toStringAsFixed(0)}m',
             ),
             _RuleLine(
-              label: 'GPS accuracy',
+              label: context.tr('attendance.gpsAccuracy'),
               value:
                   '<= ${data.settings.minimumGpsAccuracy.toStringAsFixed(0)}m',
             ),
             _RuleLine(
-              label: 'Outside geofence',
+              label: context.tr('attendance.outsideGeofence'),
               value: data.settings.requireGeofence
                   ? (data.settings.allowCheckInOutsideGeofence
-                        ? 'Allowed'
-                        : 'Blocked')
-                  : 'Not required',
+                        ? context.tr('attendance.outsideAllowed')
+                        : context.tr('attendance.outsideBlocked'))
+                  : context.tr('attendance.notRequired'),
             ),
           ],
         ),

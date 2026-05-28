@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/localization/app_translations.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../shared/widgets/async_state_view.dart';
 import '../../../shared/widgets/info_card.dart';
@@ -39,7 +40,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   @override
   Widget build(BuildContext context) {
     return ScreenScaffold(
-      title: 'Dashboard',
+      title: context.tr('dashboard.title'),
       action: IconButton(
         onPressed: _refresh,
         icon: const Icon(Icons.refresh_rounded),
@@ -66,26 +67,26 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                 _HeroCard(data: data),
                 const SizedBox(height: 14),
                 InfoCard(
-                  title: 'Assigned site',
-                  value: data.site?.name ?? 'Not assigned',
+                  title: context.tr('dashboard.assignedSite'),
+                  value: data.site?.name ?? context.tr('common.notAssigned'),
                   icon: Icons.apartment_rounded,
                 ),
                 InfoCard(
-                  title: 'Geofence radius',
+                  title: context.tr('dashboard.geofenceRadius'),
                   value: data.site == null
-                      ? 'Not set'
-                      : '${data.site!.allowedRadiusMeters.toStringAsFixed(0)} meters',
+                      ? context.tr('common.notSet')
+                      : '${data.site!.allowedRadiusMeters.toStringAsFixed(0)} m',
                   icon: Icons.radio_button_checked_rounded,
                 ),
                 InfoCard(
-                  title: 'GPS accuracy required',
+                  title: context.tr('dashboard.gpsRequired'),
                   value:
-                      '<= ${data.settings.minimumGpsAccuracy.toStringAsFixed(0)} meters',
+                      '<= ${data.settings.minimumGpsAccuracy.toStringAsFixed(0)} m',
                   icon: Icons.gps_fixed_rounded,
                 ),
                 const SizedBox(height: 12),
                 Text(
-                  'Today',
+                  context.tr('dashboard.today'),
                   style: Theme.of(
                     context,
                   ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
@@ -128,7 +129,7 @@ class _HeroCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Hello, ${data.employee.fullName}',
+            '${context.tr('dashboard.hello')}, ${data.employee.fullName}',
             style: const TextStyle(
               color: Colors.white,
               fontSize: 22,
@@ -138,8 +139,8 @@ class _HeroCard extends StatelessWidget {
           const SizedBox(height: 8),
           Text(
             checkedIn
-                ? 'You are currently checked in.'
-                : 'You are not checked in yet.',
+                ? context.tr('dashboard.checkedInStatus')
+                : context.tr('dashboard.notCheckedInStatus'),
             style: const TextStyle(color: Colors.white70, fontSize: 16),
           ),
           const SizedBox(height: 18),
@@ -150,7 +151,9 @@ class _HeroCard extends StatelessWidget {
               borderRadius: BorderRadius.circular(999),
             ),
             child: Text(
-              checkedIn ? 'ACTIVE SHIFT' : 'READY TO CHECK IN',
+              checkedIn
+                  ? context.tr('dashboard.activeShift')
+                  : context.tr('dashboard.readyToCheckIn'),
               style: const TextStyle(
                 color: Colors.white,
                 fontWeight: FontWeight.w900,
@@ -169,10 +172,10 @@ class _EmptyTodayCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Card(
+    return Card(
       child: Padding(
-        padding: EdgeInsets.all(18),
-        child: Text('No attendance records for today.'),
+        padding: const EdgeInsets.all(18),
+        child: Text(context.tr('dashboard.noToday')),
       ),
     );
   }
@@ -196,11 +199,13 @@ class _RecordTile extends StatelessWidget {
           ),
         ),
         title: Text(
-          record.label,
+          isIn
+              ? context.tr('attendance.checkIn')
+              : context.tr('attendance.checkOut'),
           style: const TextStyle(fontWeight: FontWeight.w800),
         ),
         subtitle: Text(
-          '${record.formattedTime} - ${record.distanceFromSite.toStringAsFixed(0)}m from site',
+          '${record.formattedTime} - ${record.distanceFromSite.toStringAsFixed(0)}m ${context.tr('dashboard.fromSite')}',
         ),
       ),
     );

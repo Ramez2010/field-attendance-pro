@@ -7,6 +7,7 @@ import { StatCard } from '../components/StatCard';
 import { ErrorState, LoadingState } from '../components/State';
 import { useAuth } from '../context/AuthContext';
 import { useCompanyScope } from '../context/CompanyScopeContext';
+import { useLanguage } from '../context/LanguageContext';
 import { formatDateTime } from '../lib/date';
 import { getFriendlyErrorMessage } from '../lib/errors';
 import { exportCsv, exportExcel } from '../lib/export';
@@ -32,6 +33,7 @@ function localDateKey(value: string) {
 export function ReportsPage() {
   const { profile } = useAuth();
   const { selectedCompanyId, selectedCompany } = useCompanyScope();
+  const { t } = useLanguage();
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [sites, setSites] = useState<Site[]>([]);
   const [employeeId, setEmployeeId] = useState('');
@@ -145,23 +147,23 @@ export function ReportsPage() {
   return (
     <>
       <PageHeader
-        title="Reports"
+        title={t('reportsPage.title')}
         eyebrow={selectedCompany ? `${selectedCompany.name} attendance reports` : 'Daily, employee, site, missing check-out, and late arrival views'}
         actions={
           <div className="button-row">
-            <button className="secondary-button" onClick={() => exportCsv(exportRows, 'attendance-report')} disabled={records.length === 0}>Export CSV</button>
-            <button className="secondary-button" onClick={() => exportExcel(exportRows, 'attendance-report')} disabled={records.length === 0}>Export Excel</button>
+            <button className="secondary-button" onClick={() => exportCsv(exportRows, 'attendance-report')} disabled={records.length === 0}>{t('common.exportCsv')}</button>
+            <button className="secondary-button" onClick={() => exportExcel(exportRows, 'attendance-report')} disabled={records.length === 0}>{t('common.exportExcel')}</button>
           </div>
         }
       />
       <section className="panel">
         <form className="filters-grid" onSubmit={runReport}>
-          <SelectField label="Employee" value={employeeId} onChange={(event) => setEmployeeId(event.target.value)} options={employeeOptions} />
-          <SelectField label="Site" value={siteId} onChange={(event) => setSiteId(event.target.value)} options={siteOptions} />
-          <Field label="Date from" type="date" value={dateFrom} onChange={(event) => setDateFrom(event.target.value)} />
-          <Field label="Date to" type="date" value={dateTo} onChange={(event) => setDateTo(event.target.value)} />
+          <SelectField label={t('common.employee')} value={employeeId} onChange={(event) => setEmployeeId(event.target.value)} options={employeeOptions} />
+          <SelectField label={t('common.site')} value={siteId} onChange={(event) => setSiteId(event.target.value)} options={siteOptions} />
+          <Field label={t('common.dateFrom')} type="date" value={dateFrom} onChange={(event) => setDateFrom(event.target.value)} />
+          <Field label={t('common.dateTo')} type="date" value={dateTo} onChange={(event) => setDateTo(event.target.value)} />
           <Field label="Late after" type="time" value={lateAfter} onChange={(event) => setLateAfter(event.target.value)} />
-          <button className="primary-button" disabled={reportLoading}>{reportLoading ? 'Running...' : 'Run report'}</button>
+          <button className="primary-button" disabled={reportLoading}>{reportLoading ? t('common.loading') : t('common.runReport')}</button>
         </form>
         {error && <div className="inline-error">{error}</div>}
       </section>

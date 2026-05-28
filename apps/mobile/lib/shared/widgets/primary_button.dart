@@ -1,4 +1,6 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
+
+import '../../core/localization/app_translations.dart';
 
 class PrimaryButton extends StatelessWidget {
   const PrimaryButton({
@@ -24,11 +26,16 @@ class PrimaryButton extends StatelessWidget {
           ? const SizedBox(
               height: 18,
               width: 18,
-              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: Colors.white,
+              ),
             )
           : Icon(icon ?? Icons.arrow_forward_rounded),
-      label: Text(isLoading ? 'Please wait...' : label),
-      style: backgroundColor == null ? null : ElevatedButton.styleFrom(backgroundColor: backgroundColor),
+      label: Text(isLoading ? context.tr('common.pleaseWait') : label),
+      style: backgroundColor == null
+          ? null
+          : ElevatedButton.styleFrom(backgroundColor: backgroundColor),
     );
   }
 }

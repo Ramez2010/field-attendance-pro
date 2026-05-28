@@ -8,6 +8,7 @@ import { StatCard } from '../components/StatCard';
 import { ErrorState, LoadingState } from '../components/State';
 import { useAuth } from '../context/AuthContext';
 import { useCompanyScope } from '../context/CompanyScopeContext';
+import { useLanguage } from '../context/LanguageContext';
 import { formatDateTime } from '../lib/date';
 import { getFriendlyErrorMessage } from '../lib/errors';
 import { exportExcel } from '../lib/export';
@@ -172,6 +173,7 @@ function buildMonitoringRows(records: AttendanceRecordDetailed[]) {
 export function MonitoringPage() {
   const { profile } = useAuth();
   const { selectedCompanyId, selectedCompany } = useCompanyScope();
+  const { t } = useLanguage();
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [sites, setSites] = useState<Site[]>([]);
   const [employeeId, setEmployeeId] = useState('');
@@ -331,7 +333,7 @@ export function MonitoringPage() {
   return (
     <>
       <PageHeader
-        title="Attendance Monitoring"
+        title={t('monitoring.title')}
         eyebrow={
           selectedCompany
             ? `${selectedCompany.name} check-in / check-out sessions`
@@ -340,14 +342,14 @@ export function MonitoringPage() {
         actions={
           <div className="button-row">
             <button className="secondary-button" onClick={() => void run()}>
-              Refresh
+              {t('common.refresh')}
             </button>
             <button
               className="secondary-button"
               onClick={() => exportExcel(exportRows, 'attendance-monitoring')}
               disabled={rows.length === 0}
             >
-              Export Excel
+              {t('common.exportExcel')}
             </button>
           </div>
         }
@@ -355,31 +357,31 @@ export function MonitoringPage() {
       <section className="panel">
         <form className="filters-grid" onSubmit={run}>
           <SelectField
-            label="Employee"
+            label={t('common.employee')}
             value={employeeId}
             onChange={(event) => setEmployeeId(event.target.value)}
             options={employeeOptions}
           />
           <SelectField
-            label="Site"
+            label={t('common.site')}
             value={siteId}
             onChange={(event) => setSiteId(event.target.value)}
             options={siteOptions}
           />
           <Field
-            label="Date from"
+            label={t('common.dateFrom')}
             type="date"
             value={dateFrom}
             onChange={(event) => setDateFrom(event.target.value)}
           />
           <Field
-            label="Date to"
+            label={t('common.dateTo')}
             type="date"
             value={dateTo}
             onChange={(event) => setDateTo(event.target.value)}
           />
           <button className="primary-button" disabled={running}>
-            {running ? 'Loading...' : 'Apply filters'}
+            {running ? t('common.loading') : t('common.applyFilters')}
           </button>
         </form>
         {error && <div className="inline-error">{error}</div>}

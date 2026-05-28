@@ -3,6 +3,7 @@
 import { Layout } from './components/Layout';
 import { LoadingState } from './components/State';
 import { useAuth } from './context/AuthContext';
+import { useLanguage } from './context/LanguageContext';
 import { AttendanceRulesPage } from './pages/AttendanceRulesPage';
 import { AttendanceHistoryPage } from './pages/AttendanceHistoryPage';
 import { CompanySettingsPage } from './pages/CompanySettingsPage';
@@ -17,13 +18,14 @@ import { UsersPage } from './pages/UsersPage';
 
 export function App() {
   const { session, profile, profileError, loading } = useAuth();
+  const { t } = useLanguage();
 
   if (loading) return <LoadingState />;
 
   return (
     <Routes>
       <Route path="/login" element={session ? <Navigate to="/" replace /> : <LoginPage />} />
-      <Route element={<ProtectedShell session={session} profile={profile} profileError={profileError} />}>
+      <Route element={<ProtectedShell session={session} profile={profile} profileError={profileError} t={t} />}>
         <Route element={<Layout />}>
           <Route index element={<DashboardPage />} />
           <Route path="company" element={<CompanySettingsPage />} />
@@ -46,17 +48,19 @@ function ProtectedShell({
   session,
   profile,
   profileError,
+  t,
 }: {
   session: unknown;
   profile: { role: string } | null;
   profileError: string | null;
+  t: (key: string) => string;
 }) {
   if (!session) return <Navigate to="/login" replace />;
   if (!profile && profileError) {
     return (
       <main className="login-page">
         <section className="login-card">
-          <h1>Profile setup required</h1>
+          <h1>{t('app.profileSetupRequired')}</h1>
           <p>{profileError}</p>
         </section>
       </main>
@@ -67,8 +71,8 @@ function ProtectedShell({
     return (
       <main className="login-page">
         <section className="login-card">
-          <h1>Admin access required</h1>
-          <p>This dashboard is only available to super admins and company admins.</p>
+          <h1>{t('app.adminAccessRequired')}</h1>
+          <p>{t('app.adminAccessOnly')}</p>
         </section>
       </main>
     );
