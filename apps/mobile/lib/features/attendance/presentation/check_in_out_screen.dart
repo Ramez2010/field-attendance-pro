@@ -11,6 +11,7 @@ import '../../../shared/widgets/primary_button.dart';
 import '../data/attendance_repository.dart';
 import '../domain/attendance_context.dart';
 import '../domain/attendance_record.dart';
+import '../domain/site.dart';
 import 'screen_scaffold.dart';
 
 class CheckInOutScreen extends ConsumerStatefulWidget {
@@ -26,6 +27,7 @@ class _CheckInOutScreenState extends ConsumerState<CheckInOutScreen> {
   bool _isSubmitting = false;
   String? _error;
   String? _success;
+  String? _selectedSiteId;
 
   @override
   void initState() {
@@ -50,11 +52,41 @@ class _CheckInOutScreenState extends ConsumerState<CheckInOutScreen> {
     await next;
   }
 
-  Future<void> _submit(AttendanceContext contextData) async {
+  Site? _findSiteById(List<Site> sites, String? siteId) {
+    if (siteId == null) return null;
+    for (final site in sites) {
+      if (site.id == siteId) return site;
+    }
+    return null;
+  }
+
+  String _friendlyError(Object error) {
+    final raw = error.toString().trim();
+    final prefix = 'PostgrestException(message: ';
+    if (raw.startsWith(prefix)) {
+      final withoutPrefix = raw.substring(prefix.length);
+      final endIndex = withoutPrefix.indexOf(', code:');
+      if (endIndex > 0) {
+        return withoutPrefix.substring(0, endIndex).trim();
+      }
+    }
+    return raw;
+  }
+
+  Future<void> _submit(AttendanceContext contextData, String? selectedSiteId) async {
     final checkType = contextData.isCheckedIn
         ? AttendanceCheckType.checkOut
         : AttendanceCheckType.checkIn;
     final notes = _notesController.text.trim();
+    final selectedSite = _findSiteById(contextData.allowedSites, selectedSiteId);
+
+    if (contextData.allowedSites.isNotEmpty && selectedSite == null) {
+      setState(() {
+        _error = 'Select a site before recording attendance.';
+        _success = null;
+      });
+      return;
+    }
 
     if (contextData.settings.requireNotes && notes.isEmpty) {
       setState(() {
@@ -80,7 +112,7 @@ class _CheckInOutScreenState extends ConsumerState<CheckInOutScreen> {
         );
       }
 
-      final site = contextData.site;
+      final site = selectedSite ?? contextData.site;
       if (contextData.settings.requireGeofence) {
         if (site == null) {
           throw const AppException(
@@ -114,6 +146,7 @@ class _CheckInOutScreenState extends ConsumerState<CheckInOutScreen> {
           .read(attendanceRepositoryProvider)
           .recordAttendance(
             checkType: checkType,
+            siteId: selectedSite?.id,
             latitude: position.latitude,
             longitude: position.longitude,
             gpsAccuracy: position.accuracy,
@@ -128,7 +161,7 @@ class _CheckInOutScreenState extends ConsumerState<CheckInOutScreen> {
       );
       await _refresh();
     } catch (error) {
-      setState(() => _error = error.toString());
+      setState(() => _error = _friendlyError(error));
     } finally {
       if (mounted) setState(() => _isSubmitting = false);
     }
@@ -156,12 +189,52 @@ class _CheckInOutScreenState extends ConsumerState<CheckInOutScreen> {
           }
 
           final data = snapshot.requireData;
+          final hasSelectedSite = _findSiteById(
+            data.allowedSites,
+            _selectedSiteId,
+          );
+          final selectedSiteId =
+              hasSelectedSite?.id ??
+              data.site?.id ??
+              (data.allowedSites.isNotEmpty ? data.allowedSites.first.id : null);
+
           return RefreshIndicator(
             onRefresh: _refresh,
             child: ListView(
               padding: const EdgeInsets.all(18),
               children: [
-                _StatusPanel(data: data),
+                _StatusPanel(
+                  data: data,
+                  selectedSite: _findSiteById(data.allowedSites, selectedSiteId),
+                ),
+                const SizedBox(height: 18),
+                DropdownButtonFormField<String>(
+                  key: ValueKey(selectedSiteId ?? 'no-site'),
+                  initialValue: selectedSiteId,
+                  items: data.allowedSites
+                      .map(
+                        (site) => DropdownMenuItem<String>(
+                          value: site.id,
+                          child: Text(site.name),
+                        ),
+                      )
+                      .toList(),
+                  onChanged: _isSubmitting
+                      ? null
+                      : (value) => setState(() {
+                          _selectedSiteId = value;
+                        }),
+                  decoration: const InputDecoration(
+                    labelText: 'Attendance site',
+                  ),
+                ),
+                if (data.allowedSites.isEmpty) ...[
+                  const SizedBox(height: 8),
+                  const Text(
+                    'No active site is available for attendance. Contact your admin.',
+                    style: TextStyle(color: AppTheme.danger),
+                  ),
+                ],
                 const SizedBox(height: 18),
                 TextField(
                   controller: _notesController,
@@ -191,7 +264,7 @@ class _CheckInOutScreenState extends ConsumerState<CheckInOutScreen> {
                     backgroundColor: data.isCheckedIn
                         ? AppTheme.amber
                         : AppTheme.forest,
-                    onPressed: () => _submit(data),
+                    onPressed: () => _submit(data, selectedSiteId),
                   ),
                 ),
                 const SizedBox(height: 14),
@@ -212,9 +285,10 @@ class _CheckInOutScreenState extends ConsumerState<CheckInOutScreen> {
 }
 
 class _StatusPanel extends StatelessWidget {
-  const _StatusPanel({required this.data});
+  const _StatusPanel({required this.data, required this.selectedSite});
 
   final AttendanceContext data;
+  final Site? selectedSite;
 
   @override
   Widget build(BuildContext context) {
@@ -250,7 +324,7 @@ class _StatusPanel extends StatelessWidget {
                         ),
                       ),
                       Text(
-                        data.site?.name ?? 'No assigned site',
+                        selectedSite?.name ?? 'No selected site',
                         style: const TextStyle(color: Colors.black54),
                       ),
                     ],
@@ -261,9 +335,9 @@ class _StatusPanel extends StatelessWidget {
             const SizedBox(height: 18),
             _RuleLine(
               label: 'Allowed radius',
-              value: data.site == null
+              value: selectedSite == null
                   ? '-'
-                  : '${data.site!.allowedRadiusMeters.toStringAsFixed(0)}m',
+                  : '${selectedSite!.allowedRadiusMeters.toStringAsFixed(0)}m',
             ),
             _RuleLine(
               label: 'GPS accuracy',

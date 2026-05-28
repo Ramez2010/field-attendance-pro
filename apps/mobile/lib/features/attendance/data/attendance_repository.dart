@@ -50,17 +50,82 @@ class AttendanceRepository {
         ? AttendanceSettings.defaults
         : AttendanceSettings.fromJson(Map<String, dynamic>.from(settingsJson));
 
-    Site? site;
-    if (employee.assignedSiteId != null) {
-      final siteJson = await _client
-          .from('sites')
-          .select()
-          .eq('id', employee.assignedSiteId!)
-          .maybeSingle();
-      if (siteJson != null) {
-        site = Site.fromJson(Map<String, dynamic>.from(siteJson));
+    final assignmentData = await _client
+        .from('employee_site_assignments')
+        .select('site_id,is_primary,created_at')
+        .eq('employee_id', employee.id)
+        .order('is_primary', ascending: false)
+        .order('created_at', ascending: true);
+
+    final assignedSiteIds = <String>[];
+    String? primarySiteId;
+    for (final rawRow in assignmentData) {
+      final row = Map<String, dynamic>.from(rawRow as Map);
+      final siteId = row['site_id']?.toString();
+      if (siteId == null || siteId.isEmpty) continue;
+      if (!assignedSiteIds.contains(siteId)) {
+        assignedSiteIds.add(siteId);
+      }
+      final isPrimary = row['is_primary'] == true;
+      if (isPrimary && primarySiteId == null) {
+        primarySiteId = siteId;
       }
     }
+
+    final employeeAssignedSiteId = employee.assignedSiteId;
+    if (employeeAssignedSiteId != null &&
+        employeeAssignedSiteId.isNotEmpty &&
+        !assignedSiteIds.contains(employeeAssignedSiteId)) {
+      assignedSiteIds.insert(0, employeeAssignedSiteId);
+    }
+
+    primarySiteId ??=
+        employeeAssignedSiteId ??
+        (assignedSiteIds.isNotEmpty ? assignedSiteIds.first : null);
+
+    final allowedSites = <Site>[];
+    if (assignedSiteIds.isNotEmpty) {
+      final siteData = await _client
+          .from('sites')
+          .select()
+          .eq('company_id', profile.companyId)
+          .eq('is_active', true)
+          .inFilter('id', assignedSiteIds);
+
+      final siteById = <String, Site>{};
+      for (final rawRow in siteData) {
+        final site = Site.fromJson(Map<String, dynamic>.from(rawRow as Map));
+        siteById[site.id] = site;
+      }
+
+      for (final siteId in assignedSiteIds) {
+        final site = siteById[siteId];
+        if (site != null) {
+          allowedSites.add(site);
+        }
+      }
+    } else {
+      final siteData = await _client
+          .from('sites')
+          .select()
+          .eq('company_id', profile.companyId)
+          .eq('is_active', true)
+          .order('created_at');
+      for (final rawRow in siteData) {
+        allowedSites.add(Site.fromJson(Map<String, dynamic>.from(rawRow as Map)));
+      }
+    }
+
+    Site? site;
+    if (primarySiteId != null && primarySiteId.isNotEmpty) {
+      for (final candidate in allowedSites) {
+        if (candidate.id == primarySiteId) {
+          site = candidate;
+          break;
+        }
+      }
+    }
+    site ??= allowedSites.isEmpty ? null : allowedSites.first;
 
     if (settings.requireGeofence && site == null) {
       throw const AppException(
@@ -74,6 +139,7 @@ class AttendanceRepository {
       profile: profile,
       employee: employee,
       site: site,
+      allowedSites: allowedSites,
       settings: settings,
       todayRecords: records,
     );
@@ -129,6 +195,7 @@ class AttendanceRepository {
 
   Future<AttendanceRecord> recordAttendance({
     required AttendanceCheckType checkType,
+    required String? siteId,
     required double latitude,
     required double longitude,
     required double gpsAccuracy,
@@ -146,6 +213,7 @@ class AttendanceRepository {
         'p_device_id': deviceId,
         'p_device_name': deviceName,
         'p_notes': notes,
+        'p_site_id': siteId,
       },
     );
 

@@ -9,6 +9,7 @@ class AttendanceContext {
     required this.profile,
     required this.employee,
     required this.site,
+    required this.allowedSites,
     required this.settings,
     required this.todayRecords,
   });
@@ -16,6 +17,7 @@ class AttendanceContext {
   final AppUserProfile profile;
   final Employee employee;
   final Site? site;
+  final List<Site> allowedSites;
   final AttendanceSettings settings;
   final List<AttendanceRecord> todayRecords;
 
