@@ -57,6 +57,30 @@ function sessionSiteLabel(row: MonitoringRow) {
   return checkInSite ?? checkOutSite ?? '-';
 }
 
+function formatDurationFromMinutes(totalMinutes: number) {
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  if (hours <= 0) return `${minutes}m`;
+  if (minutes <= 0) return `${hours}h`;
+  return `${hours}h ${minutes}m`;
+}
+
+function workDurationLabel(row: MonitoringRow) {
+  if (!row.check_in_time) return '-';
+
+  const checkIn = new Date(row.check_in_time).getTime();
+  if (Number.isNaN(checkIn)) return '-';
+
+  const checkOut = row.check_out_time
+    ? new Date(row.check_out_time).getTime()
+    : Date.now();
+  if (Number.isNaN(checkOut) || checkOut < checkIn) return '-';
+
+  const minutes = Math.floor((checkOut - checkIn) / 60000);
+  const formatted = formatDurationFromMinutes(minutes);
+  return row.check_out_time ? formatted : `${formatted} (running)`;
+}
+
 function buildMonitoringRows(records: AttendanceRecordDetailed[]) {
   const sorted = [...records].sort((a, b) => {
     const left = new Date(a.attendance_time).getTime();
@@ -299,6 +323,7 @@ export function MonitoringPage() {
     check_out_date_time: row.check_out_time ? formatDateTime(row.check_out_time) : '',
     check_out_site: row.check_out_site_name ?? '',
     check_out_google_map: mapUrl(row.check_out_latitude, row.check_out_longitude) ?? '',
+    work_duration: workDurationLabel(row),
   }));
 
   if (loading) return <LoadingState />;
@@ -421,6 +446,7 @@ export function MonitoringPage() {
                 );
               },
             },
+            { header: 'Work duration', cell: (row) => workDurationLabel(row) },
           ]}
           empty="No attendance sessions found for this filter."
         />
