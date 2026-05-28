@@ -57,7 +57,7 @@ function sessionSiteLabel(row: MonitoringRow) {
   return checkInSite ?? checkOutSite ?? '-';
 }
 
-function workDurationMinutes(row: MonitoringRow): number | null {
+function workDurationHours(row: MonitoringRow): number | null {
   if (!row.check_in_time) return null;
 
   const checkIn = new Date(row.check_in_time).getTime();
@@ -68,12 +68,13 @@ function workDurationMinutes(row: MonitoringRow): number | null {
     : Date.now();
   if (Number.isNaN(checkOut) || checkOut < checkIn) return null;
 
-  return Math.floor((checkOut - checkIn) / 60000);
+  const hours = (checkOut - checkIn) / (1000 * 60 * 60);
+  return Number(hours.toFixed(2));
 }
 
 function workDurationLabel(row: MonitoringRow) {
-  const minutes = workDurationMinutes(row);
-  return minutes == null ? '-' : String(minutes);
+  const hours = workDurationHours(row);
+  return hours == null ? '-' : String(hours);
 }
 
 function buildMonitoringRows(records: AttendanceRecordDetailed[]) {
@@ -310,7 +311,7 @@ export function MonitoringPage() {
   ).length;
 
   const exportRows = rows.map((row) => {
-    const durationMinutes = workDurationMinutes(row);
+    const durationHours = workDurationHours(row);
     return {
       employee: row.employee_name,
       site: sessionSiteLabel(row),
@@ -320,7 +321,7 @@ export function MonitoringPage() {
       check_out_date_time: row.check_out_time ? formatDateTime(row.check_out_time) : '',
       check_out_site: row.check_out_site_name ?? '',
       check_out_google_map: mapUrl(row.check_out_latitude, row.check_out_longitude) ?? '',
-      work_duration_minutes: durationMinutes ?? '',
+      work_duration_hours: durationHours ?? '',
     };
   });
 
@@ -445,7 +446,7 @@ export function MonitoringPage() {
               },
             },
             {
-              header: 'Work duration (minutes)',
+              header: 'Work duration (hours)',
               cell: (row) => workDurationLabel(row),
             },
           ]}
