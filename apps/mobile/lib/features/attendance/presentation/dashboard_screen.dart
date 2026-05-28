@@ -30,7 +30,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
 
   Future<void> _refresh() async {
     final next = _load();
-    setState(() => _future = next);
+    setState(() {
+      _future = next;
+    });
     await next;
   }
 
