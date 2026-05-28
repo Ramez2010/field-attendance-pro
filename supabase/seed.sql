@@ -29,7 +29,7 @@ values (
   false,
   50,
   false,
-  false,
+  true,
   false
 )
 on conflict (company_id) do nothing;

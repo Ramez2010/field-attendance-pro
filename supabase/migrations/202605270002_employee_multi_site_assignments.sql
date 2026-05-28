@@ -162,7 +162,6 @@ declare
   v_day_end timestamptz;
   v_latest_record public.attendance_records%rowtype;
   v_record public.attendance_records%rowtype;
-  v_allow_multiple boolean;
   v_require_geofence boolean;
   v_allow_outside boolean;
   v_require_notes boolean;
@@ -219,7 +218,6 @@ begin
   v_require_geofence := coalesce(v_settings.require_geofence, false);
   v_min_accuracy := coalesce(v_settings.minimum_gps_accuracy::double precision, 50);
   v_allow_outside := coalesce(v_settings.allow_check_in_outside_geofence, false);
-  v_allow_multiple := coalesce(v_settings.allow_multiple_checkins_per_day, false);
   v_require_notes := coalesce(v_settings.require_notes, false);
 
   if p_gps_accuracy > v_min_accuracy then
@@ -445,17 +443,6 @@ begin
   if p_check_type = 'check_in'::public.attendance_check_type then
     if v_latest_record.id is not null and v_latest_record.check_type = 'check_in'::public.attendance_check_type then
       raise exception 'Employee is already checked in';
-    end if;
-
-    if not v_allow_multiple and exists (
-      select 1
-      from public.attendance_records ar
-      where ar.employee_id = v_employee_id
-        and ar.check_type = 'check_in'::public.attendance_check_type
-        and ar.attendance_time >= v_day_start
-        and ar.attendance_time < v_day_end
-    ) then
-      raise exception 'Multiple check-ins are disabled for today';
     end if;
   else
     if v_latest_record.id is null or v_latest_record.check_type <> 'check_in'::public.attendance_check_type then

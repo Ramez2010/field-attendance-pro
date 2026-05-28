@@ -113,6 +113,7 @@ export function GeofenceConfigPage() {
         require_geofence: settings.require_geofence,
         minimum_gps_accuracy: Number(settings.minimum_gps_accuracy),
         allow_check_in_outside_geofence: settings.allow_check_in_outside_geofence,
+        allow_multiple_checkins_per_day: true,
       };
       const upsertPayload = settingsId ? { id: settingsId, ...payload } : payload;
       const { error: saveError } = await supabase
@@ -153,7 +154,7 @@ export function GeofenceConfigPage() {
             require_geofence: defaults.require_geofence,
             minimum_gps_accuracy: defaults.minimum_gps_accuracy,
             allow_check_in_outside_geofence: defaults.allow_check_in_outside_geofence,
-            allow_multiple_checkins_per_day: false,
+            allow_multiple_checkins_per_day: true,
             require_notes: false,
           })
           .eq('id', settingsId);
