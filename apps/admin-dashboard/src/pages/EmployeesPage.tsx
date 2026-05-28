@@ -228,6 +228,11 @@ export function EmployeesPage() {
       }
     }
 
+    if (existingLinkedUser && form.login_password.trim().length > 0 && form.login_password.trim().length < 8) {
+      setError('New login password must be at least 8 characters.');
+      return;
+    }
+
     setSaving(true);
     setError(null);
     setMessage(null);
@@ -273,6 +278,7 @@ export function EmployeesPage() {
       }
 
       let createdLinkedUser = false;
+      let updatedLinkedUser = false;
       if (form.create_login_user) {
         const { error: createUserError } = await supabase.functions.invoke('create-user', {
           body: {
@@ -292,10 +298,42 @@ export function EmployeesPage() {
 
         createdLinkedUser = true;
       }
+      else if (existingLinkedUser) {
+        const nextPassword = form.login_password.trim();
+        const loginChanged =
+          form.login_role !== existingLinkedUser.role
+          || form.login_is_active !== existingLinkedUser.is_active
+          || nextPassword.length > 0;
+
+        if (loginChanged) {
+          const { error: updateUserError } = await supabase.functions.invoke('update-user', {
+            body: {
+              user_id: existingLinkedUser.id,
+              role: form.login_role,
+              employee_id: employeeId,
+              is_active: form.login_is_active,
+              ...(nextPassword ? { password: nextPassword } : {}),
+            },
+          });
+
+          if (updateUserError) {
+            const userMessage = await getUserErrorMessage(updateUserError, 'Failed to update linked login user');
+            throw new Error(`Employee saved, but login user was not updated. ${userMessage}`);
+          }
+
+          updatedLinkedUser = true;
+        }
+      }
 
       setMessage(
         form.id
-          ? (createdLinkedUser ? 'Employee updated and login user created.' : 'Employee updated.')
+          ? (
+            createdLinkedUser
+              ? 'Employee updated and login user created.'
+              : updatedLinkedUser
+                ? 'Employee and login user updated.'
+                : 'Employee updated.'
+          )
           : (createdLinkedUser ? 'Employee and login user created.' : 'Employee created.'),
       );
       setForm(emptyForm);
@@ -529,9 +567,30 @@ export function EmployeesPage() {
             />
             <ToggleField label="Active employee" checked={form.is_active} onChange={(value) => setForm({ ...form, is_active: value })} />
             {form.id && usersByEmployeeId[form.id] && (
-              <div className="inline-success">
-                Linked login user: {usersByEmployeeId[form.id].email}.
-              </div>
+              <>
+                <div className="inline-success">
+                  Linked login user: {usersByEmployeeId[form.id].email}.
+                </div>
+                <SelectField
+                  label="Linked user role"
+                  value={form.login_role}
+                  options={loginRoleOptions}
+                  onChange={(event) => setForm((prev) => ({ ...prev, login_role: event.target.value as AppRole }))}
+                />
+                <ToggleField
+                  label="Linked user active"
+                  checked={form.login_is_active}
+                  onChange={(value) => setForm((prev) => ({ ...prev, login_is_active: value }))}
+                />
+                <Field
+                  label="Reset linked user password (optional)"
+                  type="password"
+                  minLength={8}
+                  placeholder="Leave blank to keep current password"
+                  value={form.login_password}
+                  onChange={(event) => setForm((prev) => ({ ...prev, login_password: event.target.value }))}
+                />
+              </>
             )}
             {(!form.id || !usersByEmployeeId[form.id]) && (
               <>
