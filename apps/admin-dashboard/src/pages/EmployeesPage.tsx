@@ -81,13 +81,12 @@ export function EmployeesPage() {
     [siteOptions, form.assigned_site_ids],
   );
 
-  const loginRoleOptions = useMemo(
-    () => [
-      { label: 'employee', value: 'employee' },
-      { label: 'company admin', value: 'company_admin' },
-    ],
-    [],
-  );
+  const loginRoleOptions = useMemo(() => {
+    const roles: AppRole[] = profile?.role === 'super_admin'
+      ? ['super_admin', 'company_admin', 'employee']
+      : ['company_admin', 'employee'];
+    return roles.map((role) => ({ label: role.replace('_', ' '), value: role }));
+  }, [profile]);
 
   async function load() {
     if (!profile || !selectedCompanyId) return;
@@ -228,6 +227,11 @@ export function EmployeesPage() {
       }
     }
 
+    if (existingLinkedUser && !form.login_email.trim()) {
+      setError('Linked login email is required.');
+      return;
+    }
+
     if (existingLinkedUser && form.login_password.trim().length > 0 && form.login_password.trim().length < 8) {
       setError('New login password must be at least 8 characters.');
       return;
@@ -309,6 +313,7 @@ export function EmployeesPage() {
           const { error: updateUserError } = await supabase.functions.invoke('update-user', {
             body: {
               user_id: existingLinkedUser.id,
+              email: form.login_email.trim().toLowerCase(),
               role: form.login_role,
               employee_id: employeeId,
               is_active: form.login_is_active,
@@ -353,6 +358,61 @@ export function EmployeesPage() {
       await load();
     } catch (err) {
       setError(await getFriendlyErrorMessage(err, 'Failed to update employee status'));
+    }
+  }
+
+  async function toggleLinkedUserActive(employee: Employee) {
+    const linkedUser = usersByEmployeeId[employee.id];
+    if (!linkedUser) {
+      setError('This employee has no linked login user.');
+      return;
+    }
+
+    setError(null);
+    try {
+      const { error: updateUserError } = await supabase.functions.invoke('update-user', {
+        body: {
+          user_id: linkedUser.id,
+          is_active: !linkedUser.is_active,
+          employee_id: employee.id,
+          role: linkedUser.role,
+          email: linkedUser.email,
+        },
+      });
+      if (updateUserError) throw updateUserError;
+      await load();
+    } catch (err) {
+      setError(await getUserErrorMessage(err, 'Failed to update linked user status'));
+    }
+  }
+
+  async function deleteEmployee(employee: Employee) {
+    const linkedUser = usersByEmployeeId[employee.id];
+    const prompt = linkedUser
+      ? `Delete employee "${employee.full_name}" and linked login "${linkedUser.email}"?`
+      : `Delete employee "${employee.full_name}"?`;
+    if (!confirm(prompt)) return;
+
+    setError(null);
+    setMessage(null);
+    try {
+      if (linkedUser) {
+        const { error: deleteUserError } = await supabase.functions.invoke('delete-user', {
+          body: { user_id: linkedUser.id },
+        });
+        if (deleteUserError) throw deleteUserError;
+      }
+
+      const { error: deleteEmployeeError } = await supabase
+        .from('employees')
+        .delete()
+        .eq('id', employee.id);
+      if (deleteEmployeeError) throw deleteEmployeeError;
+
+      setMessage('Employee deleted.');
+      await load();
+    } catch (err) {
+      setError(await getFriendlyErrorMessage(err, 'Failed to delete employee'));
     }
   }
 
@@ -571,6 +631,13 @@ export function EmployeesPage() {
                 <div className="inline-success">
                   Linked login user: {usersByEmployeeId[form.id].email}.
                 </div>
+                <Field
+                  label="Linked login email"
+                  type="email"
+                  value={form.login_email}
+                  onChange={(event) => setForm((prev) => ({ ...prev, login_email: event.target.value }))}
+                  required
+                />
                 <SelectField
                   label="Linked user role"
                   value={form.login_role}
@@ -648,6 +715,7 @@ export function EmployeesPage() {
               { header: 'Name', cell: (row) => row.full_name },
               { header: 'Department', cell: (row) => row.department ?? '-' },
               { header: 'Login user', cell: (row) => usersByEmployeeId[row.id]?.email ?? '-' },
+              { header: 'Login role', cell: (row) => usersByEmployeeId[row.id]?.role.replace('_', ' ') ?? '-' },
               {
                 header: 'Sites',
                 cell: (row) => {
@@ -660,11 +728,25 @@ export function EmployeesPage() {
               },
               { header: 'Status', cell: (row) => <span className={`pill ${row.is_active ? 'active' : 'inactive'}`}>{row.is_active ? 'active' : 'inactive'}</span> },
               {
+                header: 'Login',
+                cell: (row) => {
+                  const linkedUser = usersByEmployeeId[row.id];
+                  if (!linkedUser) return '-';
+                  return <span className={`pill ${linkedUser.is_active ? 'active' : 'inactive'}`}>{linkedUser.is_active ? 'active' : 'inactive'}</span>;
+                },
+              },
+              {
                 header: 'Actions',
                 cell: (row) => (
                   <div className="table-actions">
                     <button className="link-button" onClick={() => edit(row)}>Edit</button>
                     <button className="link-button" onClick={() => toggleActive(row)}>{row.is_active ? 'Deactivate' : 'Activate'}</button>
+                    {usersByEmployeeId[row.id] && (
+                      <button className="link-button" onClick={() => toggleLinkedUserActive(row)}>
+                        {usersByEmployeeId[row.id].is_active ? 'Disable login' : 'Enable login'}
+                      </button>
+                    )}
+                    <button className="link-button danger-text" onClick={() => deleteEmployee(row)}>Delete</button>
                   </div>
                 ),
               },

@@ -6,6 +6,7 @@ type AppRole = 'super_admin' | 'company_admin' | 'employee';
 
 type UpdateUserPayload = {
   user_id: string;
+  email?: string;
   role?: AppRole;
   employee_id?: string | null;
   is_active?: boolean;
@@ -76,7 +77,7 @@ Deno.serve(async (req) => {
 
     const { data: target, error: targetError } = await adminClient
       .from('users')
-      .select('id, role, company_id, employee_id')
+      .select('id, role, company_id, employee_id, email')
       .eq('id', payload.user_id)
       .single();
 
@@ -97,6 +98,15 @@ Deno.serve(async (req) => {
     const nextEmployeeId = Object.prototype.hasOwnProperty.call(payload, 'employee_id')
       ? payload.employee_id ?? null
       : target.employee_id;
+    const hasEmailField = Object.prototype.hasOwnProperty.call(payload, 'email');
+    const nextEmail = hasEmailField ? payload.email?.trim().toLowerCase() ?? '' : target.email;
+    if (hasEmailField && !nextEmail) {
+      return jsonResponse({ error: 'email is required' }, 400);
+    }
+    if (hasEmailField && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(nextEmail)) {
+      return jsonResponse({ error: 'Invalid email address' }, 400);
+    }
+    const emailChanged = hasEmailField && nextEmail !== target.email;
 
     if (nextRole === 'employee' && !nextEmployeeId) {
       return jsonResponse({ error: 'employee_id is required for employee users' }, 400);
@@ -118,14 +128,22 @@ Deno.serve(async (req) => {
     if (payload.role) patch.role = payload.role;
     if (Object.prototype.hasOwnProperty.call(payload, 'employee_id')) patch.employee_id = nextEmployeeId;
     if (Object.prototype.hasOwnProperty.call(payload, 'is_active')) patch.is_active = payload.is_active;
+    if (emailChanged) patch.email = nextEmail;
 
     if (Object.keys(patch).length === 0 && !nextPassword) {
       return jsonResponse({ error: 'No changes were provided' }, 400);
     }
 
-    if (nextPassword) {
+    const authPatch: { password?: string; email?: string; email_confirm?: boolean } = {};
+    if (nextPassword) authPatch.password = nextPassword;
+    if (emailChanged) {
+      authPatch.email = nextEmail;
+      authPatch.email_confirm = true;
+    }
+
+    if (Object.keys(authPatch).length > 0) {
       const { error: authUpdateError } = await adminClient.auth.admin.updateUserById(payload.user_id, {
-        password: nextPassword,
+        ...authPatch,
       });
       if (authUpdateError) {
         return jsonResponse({ error: authUpdateError.message }, 400);
@@ -142,6 +160,12 @@ Deno.serve(async (req) => {
         .single();
 
       if (updateError) {
+        if (emailChanged) {
+          await adminClient.auth.admin.updateUserById(payload.user_id, {
+            email: target.email,
+            email_confirm: true,
+          });
+        }
         return jsonResponse({ error: updateError.message }, 400);
       }
 
